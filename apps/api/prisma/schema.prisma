@@ -1,0 +1,455 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGEMENT
+  ACCOUNTING
+  PROJECT_MANAGER
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  INVITED
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum BudgetCategory {
+  MATERIALS
+  LABOR
+  SUBCONTRACTORS
+  EQUIPMENT
+  TRANSPORTATION
+  PERMITS
+  INSURANCE
+  PROFESSIONAL_SERVICES
+  OTHER
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum InvoiceType {
+  CUSTOMER
+  SUPPLIER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  CREDIT_CARD
+  DIRECT_DEBIT
+  OTHER
+}
+
+enum PaymentType {
+  INCOMING
+  OUTGOING
+}
+
+enum SubcontractorTrade {
+  ELECTRICAL
+  PLUMBING
+  ROOFING
+  CONCRETE
+  PAINTING
+  CARPENTRY
+  HVAC
+  OTHER
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         Role       @default(VIEWER)
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]     @relation("AuditActor")
+  notifications     Notification[]
+  managedProjects   Project[]      @relation("ProjectManager")
+
+  @@index([role])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  userAgent String?
+  ipAddress String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  actorId       String?
+  actor         User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action        String
+  entityType    String
+  entityId      String?
+  previousValue Json?
+  newValue      Json?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model CompanySettings {
+  id              String   @id @default(cuid())
+  companyName     String
+  legalName       String?
+  street          String?
+  postalCode      String?
+  city            String?
+  country         String   @default("DE")
+  vatId           String?
+  taxNumber       String?
+  iban            String?
+  bic             String?
+  defaultCurrency String   @default("EUR")
+  defaultVatRate  Decimal  @default(19.00) @db.Decimal(5, 2)
+  invoicePrefix   String   @default("RE")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("company_settings")
+}
+
+model Customer {
+  id            String    @id @default(cuid())
+  companyName   String
+  contactPerson String?
+  email         String?
+  phone         String?
+  street        String?
+  postalCode    String?
+  city          String?
+  country       String    @default("DE")
+  vatId         String?
+  taxNumber     String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  projects Project[]
+  invoices Invoice[]
+
+  @@index([companyName])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+model Supplier {
+  id            String    @id @default(cuid())
+  companyName   String
+  contactPerson String?
+  email         String?
+  phone         String?
+  street        String?
+  postalCode    String?
+  city          String?
+  country       String    @default("DE")
+  vatId         String?
+  taxNumber     String?
+  iban          String?
+  paymentTerms  String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  expenses Expense[]
+  invoices Invoice[]
+
+  @@index([companyName])
+  @@index([deletedAt])
+  @@map("suppliers")
+}
+
+model Project {
+  id                     String        @id @default(cuid())
+  projectNumber          String        @unique
+  name                   String
+  description            String?
+  customerId             String
+  customer               Customer      @relation(fields: [customerId], references: [id])
+  customerContact        String?
+  projectManagerId       String?
+  projectManager         User?         @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  siteStreet             String?
+  sitePostalCode         String?
+  siteCity               String?
+  siteCountry            String        @default("DE")
+  startDate              DateTime?
+  expectedCompletionDate DateTime?
+  actualCompletionDate   DateTime?
+  status                 ProjectStatus @default(PLANNING)
+  contractValue          Decimal       @default(0) @db.Decimal(19, 4)
+  initialBudget          Decimal       @default(0) @db.Decimal(19, 4)
+  currentBudget          Decimal       @default(0) @db.Decimal(19, 4)
+  currency               String        @default("EUR")
+  progressPercent        Int           @default(0)
+  notes                  String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  deletedAt              DateTime?
+
+  budgetLines      BudgetLine[]
+  expenses         Expense[]
+  invoices         Invoice[]
+  payments         Payment[]
+  subcontractors   ProjectSubcontractor[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([projectManagerId])
+  @@index([deletedAt])
+  @@index([name])
+  @@map("projects")
+}
+
+model Subcontractor {
+  id            String             @id @default(cuid())
+  companyName   String
+  contactPerson String?
+  trade         SubcontractorTrade @default(OTHER)
+  email         String?
+  phone         String?
+  street        String?
+  postalCode    String?
+  city          String?
+  country       String             @default("DE")
+  vatId         String?
+  taxNumber     String?
+  contractValue Decimal            @default(0) @db.Decimal(19, 4)
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  deletedAt     DateTime?
+
+  projects ProjectSubcontractor[]
+  invoices Invoice[]
+
+  @@index([companyName])
+  @@index([trade])
+  @@index([deletedAt])
+  @@map("subcontractors")
+}
+
+model ProjectSubcontractor {
+  id              String        @id @default(cuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subcontractorId String
+  subcontractor   Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+  contractValue   Decimal       @default(0) @db.Decimal(19, 4)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([projectId, subcontractorId])
+  @@index([projectId])
+  @@index([subcontractorId])
+  @@map("project_subcontractors")
+}
+
+model BudgetLine {
+  id             String         @id @default(cuid())
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category       BudgetCategory
+  plannedAmount  Decimal        @default(0) @db.Decimal(19, 4)
+  committedAmount Decimal       @default(0) @db.Decimal(19, 4)
+  actualAmount   Decimal        @default(0) @db.Decimal(19, 4)
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([projectId, category])
+  @@index([projectId])
+  @@map("budget_lines")
+}
+
+model Expense {
+  id             String         @id @default(cuid())
+  expenseNumber  String         @unique
+  projectId      String?
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  category       BudgetCategory @default(OTHER)
+  supplierId     String?
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  description    String
+  invoiceNumber  String?
+  invoiceDate    DateTime?
+  dueDate        DateTime?
+  netAmount      Decimal        @db.Decimal(19, 4)
+  taxRate        Decimal        @default(19.00) @db.Decimal(5, 2)
+  taxAmount      Decimal        @db.Decimal(19, 4)
+  grossAmount    Decimal        @db.Decimal(19, 4)
+  paidAmount     Decimal        @default(0) @db.Decimal(19, 4)
+  status         ExpenseStatus  @default(DRAFT)
+  paymentDate    DateTime?
+  paymentMethod  PaymentMethod?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  @@index([projectId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([deletedAt])
+  @@map("expenses")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  type          InvoiceType
+  projectId     String?
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  supplierId      String?
+  supplier        Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  subcontractorId String?
+  subcontractor   Subcontractor? @relation(fields: [subcontractorId], references: [id], onDelete: SetNull)
+  issueDate       DateTime
+  dueDate         DateTime
+  netAmount       Decimal        @db.Decimal(19, 4)
+  taxRate         Decimal        @default(19.00) @db.Decimal(5, 2)
+  taxAmount       Decimal        @db.Decimal(19, 4)
+  grossAmount     Decimal        @db.Decimal(19, 4)
+  paidAmount      Decimal        @default(0) @db.Decimal(19, 4)
+  status          InvoiceStatus  @default(DRAFT)
+  paymentTerms    String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@index([type])
+  @@index([projectId])
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([subcontractorId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([deletedAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Decimal @default(1) @db.Decimal(19, 4)
+  unitPrice   Decimal @db.Decimal(19, 4)
+  netAmount   Decimal @db.Decimal(19, 4)
+  sortOrder   Int     @default(0)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  paymentNumber String        @unique
+  invoiceId     String
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
+  projectId     String?
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  paymentDate   DateTime
+  amount        Decimal       @db.Decimal(19, 4)
+  type          PaymentType
+  method        PaymentMethod @default(BANK_TRANSFER)
+  reference     String?
+  bankReference String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  @@index([invoiceId])
+  @@index([projectId])
+  @@index([paymentDate])
+  @@index([deletedAt])
+  @@map("payments")
+}

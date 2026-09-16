@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fbm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fbm
+      POSTGRES_PASSWORD: fbm_dev_password
+      POSTGRES_DB: fbm_counter
+    ports:
+      - '5432:5432'
+    volumes:
+      - fbm_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fbm -d fbm_counter']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fbm_pg_data:

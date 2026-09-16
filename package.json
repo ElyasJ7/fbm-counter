@@ -1,0 +1,23 @@
+{
+  "name": "fbm-counter",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @fbm/api --filter @fbm/web run dev",
+    "dev:api": "pnpm --filter @fbm/api dev",
+    "dev:web": "pnpm --filter @fbm/web dev",
+    "build": "pnpm --filter @fbm/shared build && pnpm --filter @fbm/financial-core build && pnpm --filter @fbm/api build && pnpm --filter @fbm/web build",
+    "build:api": "pnpm --filter @fbm/shared build && pnpm --filter @fbm/financial-core build && pnpm --filter @fbm/api build",
+    "build:web": "pnpm --filter @fbm/web build",
+    "build:packages": "pnpm --filter @fbm/shared build && pnpm --filter @fbm/financial-core build",
+    "db:generate": "pnpm --filter @fbm/api prisma:generate",
+    "db:migrate": "pnpm --filter @fbm/api prisma:migrate",
+    "db:seed": "pnpm --filter @fbm/api prisma:seed",
+    "db:studio": "pnpm --filter @fbm/api prisma:studio",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
