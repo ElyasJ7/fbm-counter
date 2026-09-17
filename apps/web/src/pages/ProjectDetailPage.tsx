@@ -10,6 +10,7 @@ import {
 import {
   BUDGET_CATEGORIES,
   BUDGET_CATEGORY_LABELS,
+  SUBCONTRACTOR_TRADE_LABELS,
   roleHasPermission,
   type BudgetCategory,
 } from '@fbm/shared';
@@ -17,7 +18,9 @@ import { ProjectStatusBadge } from '../components/projects/ProjectStatusBadge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
@@ -28,31 +31,46 @@ import {
   saveProjectBudget,
   type BudgetLineInput,
 } from '../services/finance';
-import { deleteProject, fetchProject } from '../services/projects';
+import {
+  assignSubcontractorProject,
+  fetchSubcontractors,
+  unassignSubcontractorProject,
+} from '../services/partners';
+import {
+  deleteProject,
+  fetchProject,
+  fetchProjectActivity,
+  fetchProjectSubcontractors,
+} from '../services/projects';
+import { DocumentsPage } from './DocumentsPage';
 import { ExpensesPage } from './ExpensesPage';
 import { InvoicesPage } from './InvoicesPage';
 import { PaymentsPage } from './PaymentsPage';
 
 const READY_TABS = [
   'overview',
+  'financials',
   'budget',
   'expenses',
   'invoices',
   'payments',
+  'subcontractors',
+  'documents',
+  'activity',
 ] as const;
 
 type ReadyTab = (typeof READY_TABS)[number];
 
 const tabs = [
   { id: 'overview', label: 'Übersicht', ready: true },
-  { id: 'financials', label: 'Finanzen', ready: false },
+  { id: 'financials', label: 'Finanzen', ready: true },
   { id: 'budget', label: 'Budget', ready: true },
   { id: 'expenses', label: 'Ausgaben', ready: true },
   { id: 'invoices', label: 'Rechnungen', ready: true },
   { id: 'payments', label: 'Zahlungen', ready: true },
-  { id: 'subcontractors', label: 'Nachunternehmer', ready: false },
-  { id: 'documents', label: 'Dokumente', ready: false },
-  { id: 'activity', label: 'Aktivität', ready: false },
+  { id: 'subcontractors', label: 'Nachunternehmer', ready: true },
+  { id: 'documents', label: 'Dokumente', ready: true },
+  { id: 'activity', label: 'Aktivität', ready: true },
 ] as const;
 
 function isReadyTab(value: string | null): value is ReadyTab {
@@ -272,6 +290,413 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
           </Button>
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+function ProjectFinancialsTab({
+  projectId,
+  overview,
+  currency,
+  onTab,
+}: {
+  projectId: string;
+  overview: {
+    contractValue: string;
+    budget: string;
+    actualCosts: string;
+    committedCosts: string;
+    revenueReceived: string;
+    outstandingRevenue: string;
+    currentProfit: string;
+    projectedProfit: string;
+    profitMarginPercent: string | null;
+    remainingBudget: string;
+    financeDataAvailable: boolean;
+  };
+  currency: string;
+  onTab: (tab: ReadyTab) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card title="Finanzlage" description="Kennzahlen aus Projektfinanzen">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Metric
+            label="Auftragswert"
+            value={formatCurrency(overview.contractValue, currency)}
+          />
+          <Metric
+            label="Budget"
+            value={formatCurrency(overview.budget, currency)}
+          />
+          <Metric
+            label="Ist-Kosten"
+            value={formatCurrency(overview.actualCosts, currency)}
+          />
+          <Metric
+            label="Gebunden"
+            value={formatCurrency(overview.committedCosts, currency)}
+          />
+          <Metric
+            label="Erlöse erhalten"
+            value={formatCurrency(overview.revenueReceived, currency)}
+          />
+          <Metric
+            label="Erlöse offen"
+            value={formatCurrency(overview.outstandingRevenue, currency)}
+          />
+          <Metric
+            label="Aktueller Gewinn"
+            value={formatCurrency(overview.currentProfit, currency)}
+          />
+          <Metric
+            label="Prognosegewinn"
+            value={formatCurrency(overview.projectedProfit, currency)}
+          />
+          <Metric
+            label="Marge"
+            value={
+              overview.profitMarginPercent !== null
+                ? `${overview.profitMarginPercent.replace('.', ',')} %`
+                : '—'
+            }
+          />
+          <Metric
+            label="Restbudget"
+            value={formatCurrency(overview.remainingBudget, currency)}
+          />
+        </div>
+        {!overview.financeDataAvailable ? (
+          <p className="mt-4 text-sm text-[var(--color-muted)]">
+            Noch keine Finanzbewegungen für dieses Projekt.
+          </p>
+        ) : null}
+      </Card>
+      <Card title="Schnellzugriff">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => onTab('budget')}>
+            Budget
+          </Button>
+          <Button variant="secondary" onClick={() => onTab('expenses')}>
+            Ausgaben
+          </Button>
+          <Button variant="secondary" onClick={() => onTab('invoices')}>
+            Rechnungen
+          </Button>
+          <Button variant="secondary" onClick={() => onTab('payments')}>
+            Zahlungen
+          </Button>
+          <Link to={`/reports`}>
+            <Button variant="secondary">Unternehmensberichte</Button>
+          </Link>
+          <Link to={`/finances`}>
+            <Button variant="secondary">Finanzübersicht</Button>
+          </Link>
+        </div>
+        <p className="mt-3 text-xs text-[var(--color-muted)]">
+          Projekt-ID {projectId}
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const canWrite = user
+    ? roleHasPermission(user.role, 'subcontractors:write')
+    : false;
+  const [subcontractorId, setSubcontractorId] = useState('');
+  const [contractValue, setContractValue] = useState('');
+  const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const linksQuery = useQuery({
+    queryKey: ['project-subcontractors', projectId],
+    queryFn: () => fetchProjectSubcontractors(projectId),
+  });
+
+  const allSubsQuery = useQuery({
+    queryKey: ['subcontractors', 'project-assign'],
+    queryFn: () => fetchSubcontractors({ page: 1, pageSize: 100 }),
+    enabled: canWrite,
+  });
+
+  const assignedIds = new Set(
+    (linksQuery.data ?? []).map((link) => link.subcontractor.id),
+  );
+  const availableOptions = (allSubsQuery.data?.data ?? [])
+    .filter((sub) => !assignedIds.has(sub.id))
+    .map((sub) => ({
+      value: sub.id,
+      label: `${sub.companyName} (${SUBCONTRACTOR_TRADE_LABELS[sub.trade]})`,
+    }));
+
+  const assignMutation = useMutation({
+    mutationFn: () =>
+      assignSubcontractorProject(subcontractorId, {
+        projectId,
+        contractValue: contractValue.trim() || undefined,
+        notes: notes.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      setSubcontractorId('');
+      setContractValue('');
+      setNotes('');
+      setFormError(null);
+      await queryClient.invalidateQueries({
+        queryKey: ['project-subcontractors', projectId],
+      });
+    },
+    onError: (error) => {
+      setFormError(
+        error instanceof ApiError ? error.message : 'Zuweisung fehlgeschlagen',
+      );
+    },
+  });
+
+  const unassignMutation = useMutation({
+    mutationFn: (subId: string) =>
+      unassignSubcontractorProject(subId, projectId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['project-subcontractors', projectId],
+      });
+    },
+  });
+
+  if (linksQuery.isLoading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (linksQuery.error) {
+    return (
+      <EmptyState
+        title="Nachunternehmer konnten nicht geladen werden"
+        description={
+          linksQuery.error instanceof ApiError
+            ? linksQuery.error.message
+            : 'Unerwarteter Fehler'
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {canWrite ? (
+        <Card title="Nachunternehmer zuweisen">
+          <div className="grid gap-3 md:grid-cols-3">
+            <Select
+              label="Nachunternehmer"
+              name="subcontractorId"
+              value={subcontractorId}
+              onChange={(e) => setSubcontractorId(e.target.value)}
+              options={availableOptions}
+              placeholder="Auswählen…"
+            />
+            <Input
+              label="Auftragswert"
+              name="contractValue"
+              value={contractValue}
+              onChange={(e) => setContractValue(e.target.value)}
+            />
+            <Input
+              label="Notiz"
+              name="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+          {formError ? (
+            <p className="mt-3 text-sm text-[var(--color-danger)]" role="alert">
+              {formError}
+            </p>
+          ) : null}
+          <div className="mt-4">
+            <Button
+              disabled={!subcontractorId || assignMutation.isPending}
+              onClick={() => assignMutation.mutate()}
+            >
+              Zuweisen
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      <Card title="Zugewiesene Nachunternehmer">
+        {(linksQuery.data?.length ?? 0) === 0 ? (
+          <EmptyState
+            title="Keine Nachunternehmer"
+            description="Weisen Sie Nachunternehmer diesem Projekt zu."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Firma</th>
+                  <th className="px-3 py-2 font-medium">Gewerk</th>
+                  <th className="px-3 py-2 font-medium">Auftragswert</th>
+                  <th className="px-3 py-2 font-medium">Kontakt</th>
+                  {canWrite ? (
+                    <th className="px-3 py-2 font-medium">Aktionen</th>
+                  ) : null}
+                </tr>
+              </thead>
+              <tbody>
+                {linksQuery.data?.map((link) => (
+                  <tr
+                    key={link.id}
+                    className="border-b border-[var(--color-border)] last:border-0"
+                  >
+                    <td className="px-3 py-3">
+                      <Link
+                        to={`/subcontractors/${link.subcontractor.id}`}
+                        className="font-medium text-[var(--color-accent)] hover:underline"
+                      >
+                        {link.subcontractor.companyName}
+                      </Link>
+                      {link.notes ? (
+                        <div className="text-xs text-[var(--color-muted)]">
+                          {link.notes}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-3">
+                      {SUBCONTRACTOR_TRADE_LABELS[link.subcontractor.trade]}
+                    </td>
+                    <td className="px-3 py-3">
+                      {formatCurrency(link.contractValue)}
+                    </td>
+                    <td className="px-3 py-3">
+                      {link.subcontractor.contactPerson ||
+                        link.subcontractor.email ||
+                        '—'}
+                    </td>
+                    {canWrite ? (
+                      <td className="px-3 py-3">
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Zuweisung von „${link.subcontractor.companyName}“ entfernen?`,
+                              )
+                            ) {
+                              unassignMutation.mutate(link.subcontractor.id);
+                            }
+                          }}
+                        >
+                          Entfernen
+                        </Button>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function ProjectActivityTab({ projectId }: { projectId: string }) {
+  const { user } = useAuth();
+  const canRead = user ? roleHasPermission(user.role, 'audit:read') : false;
+
+  const query = useQuery({
+    queryKey: ['project-activity', projectId],
+    queryFn: () => fetchProjectActivity(projectId),
+    enabled: canRead,
+    retry: false,
+  });
+
+  if (!canRead) {
+    return (
+      <EmptyState
+        title="Kein Zugriff"
+        description="Audit-Aktivität ist nur für Verwaltung und Admins sichtbar."
+      />
+    );
+  }
+
+  if (query.isLoading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (query.error) {
+    return (
+      <EmptyState
+        title="Aktivität konnte nicht geladen werden"
+        description={
+          query.error instanceof ApiError
+            ? query.error.message
+            : 'Unerwarteter Fehler'
+        }
+      />
+    );
+  }
+
+  if ((query.data?.length ?? 0) === 0) {
+    return (
+      <EmptyState
+        title="Noch keine Aktivität"
+        description="Änderungen an diesem Projekt erscheinen hier."
+      />
+    );
+  }
+
+  return (
+    <Card title="Aktivitätsprotokoll" description="Letzte 50 Ereignisse">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+            <tr>
+              <th className="px-3 py-2 font-medium">Zeitpunkt</th>
+              <th className="px-3 py-2 font-medium">Aktion</th>
+              <th className="px-3 py-2 font-medium">Objekt</th>
+              <th className="px-3 py-2 font-medium">Benutzer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {query.data?.map((row) => (
+              <tr
+                key={row.id}
+                className="border-b border-[var(--color-border)] last:border-0"
+              >
+                <td className="px-3 py-3">{formatDateDe(row.createdAt)}</td>
+                <td className="px-3 py-3 font-medium">{row.action}</td>
+                <td className="px-3 py-3">
+                  {row.entityType}
+                  {row.entityId ? (
+                    <div className="text-xs text-[var(--color-muted)]">
+                      {row.entityId}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="px-3 py-3">
+                  {row.actor
+                    ? `${row.actor.firstName} ${row.actor.lastName}`
+                    : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
@@ -570,6 +995,14 @@ export function ProjectDetailPage() {
         </div>
       ) : null}
 
+      {activeTab === 'financials' ? (
+        <ProjectFinancialsTab
+          projectId={project.id}
+          overview={overview}
+          currency={overview.currency}
+          onTab={setTab}
+        />
+      ) : null}
       {activeTab === 'budget' ? <ProjectBudgetTab projectId={project.id} /> : null}
       {activeTab === 'expenses' ? (
         <ExpensesPage embeddedProjectId={project.id} compact />
@@ -579,6 +1012,15 @@ export function ProjectDetailPage() {
       ) : null}
       {activeTab === 'payments' ? (
         <PaymentsPage embeddedProjectId={project.id} compact />
+      ) : null}
+      {activeTab === 'subcontractors' ? (
+        <ProjectSubcontractorsTab projectId={project.id} />
+      ) : null}
+      {activeTab === 'documents' ? (
+        <DocumentsPage embeddedProjectId={project.id} compact />
+      ) : null}
+      {activeTab === 'activity' ? (
+        <ProjectActivityTab projectId={project.id} />
       ) : null}
     </div>
   );

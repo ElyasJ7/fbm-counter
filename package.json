@@ -15,7 +15,7 @@
     "db:seed": "pnpm --filter @fbm/api prisma:seed",
     "db:studio": "pnpm --filter @fbm/api prisma:studio",
     "lint": "pnpm -r run lint",
-    "test": "pnpm -r run test"
+    "test": "pnpm --filter @fbm/financial-core test && pnpm --filter @fbm/shared test && pnpm --filter @fbm/api test && pnpm --filter @fbm/web test"
   },
   "engines": {
     "node": ">=20"

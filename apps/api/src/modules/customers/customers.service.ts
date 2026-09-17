@@ -12,11 +12,7 @@ import type { UpdateCustomerDto } from './dto/update-customer.dto';
 export class CustomersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-  }) {
+  async findAll(params: { page?: number; pageSize?: number; search?: string }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const search = params.search?.trim();
@@ -92,7 +88,7 @@ export class CustomersService {
           action: 'CUSTOMER_CREATED',
           entityType: 'Customer',
           entityId: customer.id,
-          newValue: customer as unknown as Prisma.InputJsonValue,
+          newValue: customer,
         },
       });
 
@@ -126,8 +122,8 @@ export class CustomersService {
           action: 'CUSTOMER_UPDATED',
           entityType: 'Customer',
           entityId: id,
-          previousValue: existing as unknown as Prisma.InputJsonValue,
-          newValue: customer as unknown as Prisma.InputJsonValue,
+          previousValue: existing,
+          newValue: customer,
         },
       });
 
@@ -161,7 +157,7 @@ export class CustomersService {
           action: 'CUSTOMER_DELETED',
           entityType: 'Customer',
           entityId: id,
-          previousValue: existing as unknown as Prisma.InputJsonValue,
+          previousValue: existing,
         },
       });
     });

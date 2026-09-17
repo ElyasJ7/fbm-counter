@@ -1,5 +1,9 @@
 import { PrismaClient, ProjectStatus, Role, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { mkdir, writeFile } from 'fs/promises';
+import { join, resolve } from 'path';
+import { randomUUID } from 'crypto';
+import { assertSeedAllowed, buildUserSeedUpsert } from '../src/common/seed-guards';
 
 const prisma = new PrismaClient();
 
@@ -48,23 +52,32 @@ const seedUsers: Array<{
 ];
 
 async function main() {
+  assertSeedAllowed(process.env);
+
   for (const user of seedUsers) {
     const passwordHash = await argon2.hash(user.password);
+    const upsert = buildUserSeedUpsert({
+      email: user.email,
+      passwordHash,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      status: UserStatus.ACTIVE,
+    });
     await prisma.user.upsert({
-      where: { email: user.email },
+      where: upsert.where,
       update: {
-        passwordHash,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: upsert.update.firstName,
+        lastName: upsert.update.lastName,
         role: user.role,
         status: UserStatus.ACTIVE,
         deletedAt: null,
       },
       create: {
-        email: user.email,
-        passwordHash,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        email: upsert.create.email,
+        passwordHash: upsert.create.passwordHash,
+        firstName: upsert.create.firstName,
+        lastName: upsert.create.lastName,
         role: user.role,
         status: UserStatus.ACTIVE,
       },
@@ -619,10 +632,96 @@ async function main() {
     },
   });
 
+  const admin = await prisma.user.findUnique({
+    where: { email: 'admin@musterbau.example' },
+  });
+  const uploaderId = admin?.id ?? pm?.id;
+  if (uploaderId) {
+    const existingDoc = await prisma.document.findFirst({
+      where: {
+        originalFileName: 'Bauvertrag-Giesing.txt',
+        deletedAt: null,
+      },
+    });
+    if (!existingDoc) {
+      const uploadRoot = resolve(process.env.UPLOAD_DIR ?? 'uploads');
+      const year = '2026';
+      const month = '09';
+      const storageKey = `${year}/${month}/${randomUUID()}.txt`;
+      const absoluteDir = join(uploadRoot, year, month);
+      await mkdir(absoluteDir, { recursive: true });
+      const content =
+        'Muster Bau GmbH — Bauvertrag Wohnanlage Giesing Nord (Seed-Dokument).\n';
+      await writeFile(join(uploadRoot, storageKey), content, 'utf8');
+
+      await prisma.document.create({
+        data: {
+          title: 'Bauvertrag (Entwurf)',
+          originalFileName: 'Bauvertrag-Giesing.txt',
+          storageKey,
+          mimeType: 'text/plain',
+          sizeBytes: Buffer.byteLength(content, 'utf8'),
+          category: 'CONTRACT',
+          description: 'Seed-Dokument für Phase 6 Demo',
+          projectId: project1.id,
+          uploadedById: uploaderId,
+        },
+      });
+    }
+  }
+
+  if (pm?.id) {
+    const existingNote = await prisma.notification.findFirst({
+      where: {
+        userId: pm.id,
+        type: 'system.welcome',
+      },
+    });
+    if (!existingNote) {
+      await prisma.notification.create({
+        data: {
+          userId: pm.id,
+          title: 'Willkommen bei FBM Counter',
+          message:
+            'Benachrichtigungen erscheinen hier bei freigegebenen Ausgaben, überfälligen Rechnungen und neuen Dokumenten.',
+          type: 'system.welcome',
+          link: '/projects',
+        },
+      });
+    }
+  }
+
+  if (admin?.id) {
+    const existingAdminNote = await prisma.notification.findFirst({
+      where: {
+        userId: admin.id,
+        type: 'system.welcome',
+      },
+    });
+    if (!existingAdminNote) {
+      await prisma.notification.create({
+        data: {
+          userId: admin.id,
+          title: 'Benachrichtigungen aktiv',
+          message:
+            'Phase 9: Glocke in der Kopfzeile zeigt ungelesene Meldungen an.',
+          type: 'system.welcome',
+          link: '/notifications',
+        },
+      });
+    }
+  }
+
   console.log('Seed completed.');
-  console.log('Demo users (password shown once for local development):');
-  for (const user of seedUsers) {
-    console.log(`  ${user.role.padEnd(16)} ${user.email} / ${user.password}`);
+  if ((process.env.NODE_ENV ?? 'development').toLowerCase() !== 'production') {
+    console.log('Demo users (password shown once for local development):');
+    for (const user of seedUsers) {
+      console.log(`  ${user.role.padEnd(16)} ${user.email} / ${user.password}`);
+    }
+  } else {
+    console.log(
+      'Production seed finished. Demo passwords were applied only for newly created users.',
+    );
   }
   console.log(`Customers: ${customerIds.length}, Projects: ${projects.length}`);
   console.log(

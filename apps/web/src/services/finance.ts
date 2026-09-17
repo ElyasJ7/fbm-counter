@@ -66,7 +66,6 @@ export type InvoiceInput = {
   dueDate: string;
   netAmount: string;
   taxRate?: string;
-  paidAmount?: string;
   status?: InvoiceStatus;
   paymentTerms?: string;
   notes?: string;
@@ -178,6 +177,10 @@ export function deleteInvoice(id: string) {
   return apiRequest<{ success: boolean }>(`/invoices/${id}`, {
     method: 'DELETE',
   });
+}
+
+export function invoicePdfPath(id: string) {
+  return `/invoices/${id}/pdf`;
 }
 
 export function fetchPayments(params: {

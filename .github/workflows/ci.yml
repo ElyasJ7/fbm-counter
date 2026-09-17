@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fbm
+          POSTGRES_PASSWORD: fbm_dev_password
+          POSTGRES_DB: fbm_counter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fbm -d fbm_counter"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://fbm:fbm_dev_password@localhost:5432/fbm_counter?schema=public
+
+      - name: Unit tests
+        run: |
+          pnpm --filter @fbm/financial-core test
+          pnpm --filter @fbm/shared test
+          pnpm --filter @fbm/api test
+
+      - name: API e2e smoke
+        run: pnpm --filter @fbm/api test:e2e
+
+      - name: Typecheck / build
+        run: pnpm build
+        env:
+          DATABASE_URL: postgresql://fbm:fbm_dev_password@localhost:5432/fbm_counter?schema=public
+          VITE_API_URL: http://localhost:3001/api

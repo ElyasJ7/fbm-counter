@@ -15,8 +15,7 @@ export class BudgetsController {
     @Param('projectId') projectId: string,
     @Query('sync') sync?: string,
   ) {
-    const syncFromExpenses =
-      sync === '1' || sync === 'true' || sync === 'yes';
+    const syncFromExpenses = sync === '1' || sync === 'true' || sync === 'yes';
     return this.budgetsService.listForProject(projectId, syncFromExpenses);
   }
 

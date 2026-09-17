@@ -45,9 +45,9 @@ export class AuthService {
   }
 
   private cookieOptions(maxAgeMs: number) {
-    const secure = this.config.get<string>('COOKIE_SECURE') === 'true';
-    const sameSite = (this.config.get<string>('COOKIE_SAME_SITE') ??
-      'lax') as 'lax' | 'strict' | 'none';
+    const secure = this.resolveCookieSecure();
+    const sameSite = (this.config.get<string>('COOKIE_SAME_SITE') ?? 'lax') as
+      'lax' | 'strict' | 'none';
     return {
       httpOnly: true,
       secure,
@@ -55,6 +55,13 @@ export class AuthService {
       path: '/',
       maxAge: maxAgeMs,
     };
+  }
+
+  private resolveCookieSecure(): boolean {
+    const explicit = this.config.get<string>('COOKIE_SECURE');
+    if (explicit === 'true') return true;
+    if (explicit === 'false') return false;
+    return this.config.get<string>('NODE_ENV') === 'production';
   }
 
   private parseDurationToMs(value: string, fallbackMs: number): number {
@@ -90,9 +97,9 @@ export class AuthService {
   }
 
   clearAuthCookies(res: Response) {
-    const secure = this.config.get<string>('COOKIE_SECURE') === 'true';
-    const sameSite = (this.config.get<string>('COOKIE_SAME_SITE') ??
-      'lax') as 'lax' | 'strict' | 'none';
+    const secure = this.resolveCookieSecure();
+    const sameSite = (this.config.get<string>('COOKIE_SAME_SITE') ?? 'lax') as
+      'lax' | 'strict' | 'none';
     const base = { httpOnly: true, secure, sameSite, path: '/' };
     res.clearCookie(ACCESS_COOKIE, base);
     res.clearCookie(REFRESH_COOKIE, base);
@@ -213,7 +220,11 @@ export class AuthService {
     return { user: authUser };
   }
 
-  async logout(userId: string | undefined, refreshToken: string | undefined, res: Response) {
+  async logout(
+    userId: string | undefined,
+    refreshToken: string | undefined,
+    res: Response,
+  ) {
     if (refreshToken) {
       const tokenHash = this.hashToken(refreshToken);
       await this.prisma.refreshToken.updateMany({

@@ -22,17 +22,40 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
-import { ApiError } from '../lib/api';
+import { ApiError, apiDownload } from '../lib/api';
 import { formatCurrency, formatDateDe } from '../lib/format';
 import {
   createInvoice,
   deleteInvoice,
   fetchInvoices,
   fetchSuppliers,
+  invoicePdfPath,
   type InvoiceInput,
 } from '../services/finance';
 import { fetchCustomers, fetchProjects } from '../services/projects';
 
+async function downloadInvoicePdf(id: string, fallbackName: string) {
+  const response = await apiDownload(invoicePdfPath(id));
+  if (!response.ok) {
+    throw new Error('PDF-Download fehlgeschlagen');
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/.exec(
+    disposition,
+  );
+  const filename = decodeURIComponent(
+    match?.[1] ?? match?.[2] ?? fallbackName,
+  );
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -468,6 +491,24 @@ export function InvoicesPage({
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="text-[var(--color-brand)] hover:underline"
+                            onClick={() => {
+                              void downloadInvoicePdf(
+                                invoice.id,
+                                `${invoice.invoiceNumber}.pdf`,
+                              ).catch((error) => {
+                                window.alert(
+                                  error instanceof Error
+                                    ? error.message
+                                    : 'PDF-Download fehlgeschlagen',
+                                );
+                              });
+                            }}
+                          >
+                            PDF
+                          </button>
                           <Link
                             className="text-[var(--color-brand)] hover:underline"
                             to={`/payments?invoiceId=${invoice.id}`}

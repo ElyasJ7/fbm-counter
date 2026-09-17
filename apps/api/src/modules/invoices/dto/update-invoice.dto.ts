@@ -58,10 +58,6 @@ export class UpdateInvoiceDto {
   taxRate?: string;
 
   @IsOptional()
-  @IsNumberString()
-  paidAmount?: string;
-
-  @IsOptional()
   @IsEnum(InvoiceStatus)
   status?: InvoiceStatus;
 

@@ -58,7 +58,7 @@ export class ProjectsService {
   private async serializeDetail(
     project: Prisma.ProjectGetPayload<{ include: typeof projectDetailInclude }>,
   ) {
-    const overview = await this.projectFinance.buildOverview(project);
+    const overview = await this.projectFinance.getOverview(project.id);
     return {
       ...this.serializeListItem({
         ...project,
@@ -80,8 +80,7 @@ export class ProjectsService {
       sitePostalCode: project.sitePostalCode,
       siteCity: project.siteCity,
       siteCountry: project.siteCountry,
-      actualCompletionDate:
-        project.actualCompletionDate?.toISOString() ?? null,
+      actualCompletionDate: project.actualCompletionDate?.toISOString() ?? null,
       initialBudget: this.decimalToString(project.initialBudget),
       notes: project.notes,
       createdAt: project.createdAt.toISOString(),
@@ -116,7 +115,9 @@ export class ProjectsService {
       },
     });
     if (!manager) {
-      throw new BadRequestException('Project manager not found or not eligible');
+      throw new BadRequestException(
+        'Project manager not found or not eligible',
+      );
     }
   }
 
@@ -187,62 +188,80 @@ export class ProjectsService {
     await this.assertCustomerExists(dto.customerId);
     await this.assertManagerExists(dto.projectManagerId);
 
+    // projectNumber is globally unique (including soft-deleted rows)
     const existingNumber = await this.prisma.project.findFirst({
-      where: { projectNumber: dto.projectNumber, deletedAt: null },
+      where: { projectNumber: dto.projectNumber },
+      select: { id: true, deletedAt: true },
     });
     if (existingNumber) {
-      throw new ConflictException('Project number already exists');
+      throw new ConflictException(
+        existingNumber.deletedAt
+          ? 'Project number already exists (including a deleted project). Choose another number.'
+          : 'Project number already exists',
+      );
     }
 
     const currentBudget = dto.currentBudget ?? dto.initialBudget;
 
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.project.create({
-        data: {
-          projectNumber: dto.projectNumber,
-          name: dto.name,
-          description: dto.description,
-          customerId: dto.customerId,
-          customerContact: dto.customerContact,
-          projectManagerId: dto.projectManagerId,
-          siteStreet: dto.siteStreet,
-          sitePostalCode: dto.sitePostalCode,
-          siteCity: dto.siteCity,
-          siteCountry: dto.siteCountry ?? 'DE',
-          startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-          expectedCompletionDate: dto.expectedCompletionDate
-            ? new Date(dto.expectedCompletionDate)
-            : undefined,
-          actualCompletionDate: dto.actualCompletionDate
-            ? new Date(dto.actualCompletionDate)
-            : undefined,
-          status: dto.status ?? ProjectStatus.PLANNING,
-          contractValue: dto.contractValue,
-          initialBudget: dto.initialBudget,
-          currentBudget,
-          currency: dto.currency ?? 'EUR',
-          progressPercent: dto.progressPercent ?? 0,
-          notes: dto.notes,
-        },
-        include: projectDetailInclude,
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          action: 'PROJECT_CREATED',
-          entityType: 'Project',
-          entityId: created.id,
-          newValue: {
-            projectNumber: created.projectNumber,
-            name: created.name,
-            status: created.status,
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const row = await tx.project.create({
+          data: {
+            projectNumber: dto.projectNumber,
+            name: dto.name,
+            description: dto.description,
+            customerId: dto.customerId,
+            customerContact: dto.customerContact,
+            projectManagerId: dto.projectManagerId,
+            siteStreet: dto.siteStreet,
+            sitePostalCode: dto.sitePostalCode,
+            siteCity: dto.siteCity,
+            siteCountry: dto.siteCountry ?? 'DE',
+            startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+            expectedCompletionDate: dto.expectedCompletionDate
+              ? new Date(dto.expectedCompletionDate)
+              : undefined,
+            actualCompletionDate: dto.actualCompletionDate
+              ? new Date(dto.actualCompletionDate)
+              : undefined,
+            status: dto.status ?? ProjectStatus.PLANNING,
+            contractValue: dto.contractValue,
+            initialBudget: dto.initialBudget,
+            currentBudget,
+            currency: dto.currency ?? 'EUR',
+            progressPercent: dto.progressPercent ?? 0,
+            notes: dto.notes,
           },
-        },
+          include: projectDetailInclude,
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorId,
+            action: 'PROJECT_CREATED',
+            entityType: 'Project',
+            entityId: row.id,
+            newValue: {
+              projectNumber: row.projectNumber,
+              name: row.name,
+              status: row.status,
+            },
+          },
+        });
+
+        return row;
       });
 
       return this.serializeDetail(created);
-    });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Project number already exists');
+      }
+      throw error;
+    }
   }
 
   async update(id: string, dto: UpdateProjectDto, actorId: string) {
@@ -263,12 +282,16 @@ export class ProjectsService {
       const clash = await this.prisma.project.findFirst({
         where: {
           projectNumber: dto.projectNumber,
-          deletedAt: null,
           NOT: { id },
         },
+        select: { id: true, deletedAt: true },
       });
       if (clash) {
-        throw new ConflictException('Project number already exists');
+        throw new ConflictException(
+          clash.deletedAt
+            ? 'Project number already exists (including a deleted project). Choose another number.'
+            : 'Project number already exists',
+        );
       }
     }
 
@@ -351,9 +374,13 @@ export class ProjectsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Free the unique projectNumber so it can be reused after soft-delete
       await tx.project.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: {
+          deletedAt: new Date(),
+          projectNumber: `${existing.projectNumber}__deleted__${id.slice(-8)}`,
+        },
       });
       await tx.auditLog.create({
         data: {
@@ -370,5 +397,115 @@ export class ProjectsService {
     });
 
     return { success: true };
+  }
+
+  async listSubcontractors(projectId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const links = await this.prisma.projectSubcontractor.findMany({
+      where: { projectId },
+      include: {
+        subcontractor: {
+          select: {
+            id: true,
+            companyName: true,
+            trade: true,
+            contactPerson: true,
+            email: true,
+            phone: true,
+            deletedAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return links
+      .filter((link) => !link.subcontractor.deletedAt)
+      .map((link) => ({
+        id: link.id,
+        contractValue: this.decimalToString(link.contractValue),
+        notes: link.notes,
+        subcontractor: {
+          id: link.subcontractor.id,
+          companyName: link.subcontractor.companyName,
+          trade: link.subcontractor.trade,
+          contactPerson: link.subcontractor.contactPerson,
+          email: link.subcontractor.email,
+          phone: link.subcontractor.phone,
+        },
+      }));
+  }
+
+  async listActivity(projectId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const related = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.expense.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.payment.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true },
+      }),
+    ]);
+
+    const relatedIds = [
+      projectId,
+      ...related[0].map((row) => row.id),
+      ...related[1].map((row) => row.id),
+      ...related[2].map((row) => row.id),
+    ];
+
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { entityType: 'Project', entityId: projectId },
+          { entityType: 'BudgetLine', entityId: projectId },
+          {
+            entityType: { in: ['Invoice', 'Expense', 'Payment', 'Document'] },
+            entityId: { in: relatedIds },
+          },
+        ],
+      },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return logs.map((log) => ({
+      id: log.id,
+      action: log.action,
+      entityType: log.entityType,
+      entityId: log.entityId,
+      createdAt: log.createdAt.toISOString(),
+      actor: log.actor,
+    }));
   }
 }

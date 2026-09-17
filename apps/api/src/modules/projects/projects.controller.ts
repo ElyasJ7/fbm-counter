@@ -38,6 +38,18 @@ export class ProjectsController {
     });
   }
 
+  @Get(':id/subcontractors')
+  @RequirePermissions('subcontractors:read')
+  listSubcontractors(@Param('id') id: string) {
+    return this.projectsService.listSubcontractors(id);
+  }
+
+  @Get(':id/activity')
+  @RequirePermissions('audit:read')
+  listActivity(@Param('id') id: string) {
+    return this.projectsService.listActivity(id);
+  }
+
   @Get(':id')
   @RequirePermissions('projects:read')
   findOne(@Param('id') id: string) {

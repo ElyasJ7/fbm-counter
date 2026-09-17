@@ -6,8 +6,9 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
-        "lint": "oxlint",
-        "preview": "vite preview"
+    "lint": "oxlint",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "preview": "vite preview"
     },
     "dependencies": {
         "@fbm/financial-core": "workspace:*",

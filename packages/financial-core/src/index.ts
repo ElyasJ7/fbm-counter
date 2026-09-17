@@ -312,3 +312,13 @@ export function resolveExpenseStatus(input: {
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
+
+export {
+  aggregateCosts,
+  aggregateSupplierSpend,
+  buildSupplierInvoiceNumberSet,
+  expenseDuplicatesSupplierInvoice,
+  normalizeInvoiceKey,
+  type AggregatedCosts,
+  type CostMoneyRow,
+} from './cost-policy';

@@ -4,17 +4,26 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InvoiceStatus, InvoiceType, Prisma } from '@prisma/client';
+import { InvoiceStatus, InvoiceType, Prisma, Role } from '@prisma/client';
 import {
   calculateGrossAmount,
   calculateTaxAmount,
   money,
   resolveInvoiceStatus,
-  type InvoiceStatusName,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateInvoiceDto, InvoiceItemDto } from './dto/create-invoice.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { BudgetsService } from '../budgets/budgets.service';
+import { buildPdfBuffer } from '../common/pdf.util';
+import type {
+  CreateInvoiceDto,
+  InvoiceItemDto,
+} from './dto/create-invoice.dto';
 import type { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import {
+  assertInvoiceDeletable,
+  assertInvoiceFinancialEditAllowed,
+} from './invoice-lifecycle';
 
 const invoiceInclude = {
   project: { select: { id: true, projectNumber: true, name: true } },
@@ -24,12 +33,75 @@ const invoiceInclude = {
   items: { orderBy: { sortOrder: 'asc' as const } },
 } satisfies Prisma.InvoiceInclude;
 
+const invoiceListInclude = {
+  project: { select: { id: true, projectNumber: true, name: true } },
+  customer: { select: { id: true, companyName: true } },
+  supplier: { select: { id: true, companyName: true } },
+  subcontractor: { select: { id: true, companyName: true } },
+} satisfies Prisma.InvoiceInclude;
+
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly budgets: BudgetsService,
+  ) {}
+
+  private async syncBudgetForInvoice(input: {
+    type: InvoiceType;
+    projectId: string | null | undefined;
+    actorId: string;
+  }) {
+    if (input.type !== InvoiceType.SUPPLIER || !input.projectId) return;
+    await this.budgets
+      .syncAndNotifyOverruns(input.projectId, input.actorId)
+      .catch(() => undefined);
+  }
 
   private decimalToString(value: Prisma.Decimal | string | number): string {
     return value.toString();
+  }
+
+  private async notifyIfNewlyOverdue(
+    invoice: {
+      id: string;
+      invoiceNumber: string;
+      status: InvoiceStatus;
+      projectId: string | null;
+      project: { projectNumber: string; name: string } | null;
+    },
+    previousStatus: InvoiceStatus | null,
+    actorId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    if (
+      invoice.status !== InvoiceStatus.OVERDUE ||
+      previousStatus === InvoiceStatus.OVERDUE
+    ) {
+      return;
+    }
+
+    const projectLabel = invoice.project
+      ? `${invoice.project.projectNumber} — ${invoice.project.name}`
+      : 'ohne Projekt';
+    const payload = {
+      title: 'Rechnung überfällig',
+      message: `${invoice.invoiceNumber} ist überfällig · ${projectLabel}`,
+      type: 'invoice.overdue',
+      link: invoice.projectId
+        ? `/projects/${invoice.projectId}?tab=invoices`
+        : '/invoices',
+    };
+
+    await this.notifications.notifyProjectManager(invoice.projectId, payload, {
+      excludeUserId: actorId,
+      tx,
+    });
+    await this.notifications.createForRoles([Role.ACCOUNTING], payload, {
+      excludeUserId: actorId,
+      tx,
+    });
   }
 
   private async nextInvoiceNumber(
@@ -37,7 +109,14 @@ export class InvoicesService {
     tx: Prisma.TransactionClient = this.prisma,
   ) {
     const year = new Date().getFullYear();
-    const prefix = type === InvoiceType.CUSTOMER ? `RE-${year}-` : `ER-${year}-`;
+    const settings = await tx.companySettings.findFirst({
+      select: { invoicePrefix: true },
+    });
+    const customerPrefix = (
+      settings?.invoicePrefix?.trim() || 'RE'
+    ).toUpperCase();
+    const basePrefix = type === InvoiceType.CUSTOMER ? customerPrefix : 'ER';
+    const prefix = `${basePrefix}-${year}-`;
     const latest = await tx.invoice.findFirst({
       where: { invoiceNumber: { startsWith: prefix } },
       orderBy: { invoiceNumber: 'desc' },
@@ -64,7 +143,10 @@ export class InvoicesService {
       const quantity = item.quantity ?? '1';
       const netAmount =
         item.netAmount ??
-        money(quantity).mul(money(item.unitPrice)).toDecimalPlaces(4).toFixed(4);
+        money(quantity)
+          .mul(money(item.unitPrice))
+          .toDecimalPlaces(4)
+          .toFixed(4);
       return {
         description: item.description,
         quantity,
@@ -76,14 +158,28 @@ export class InvoicesService {
   }
 
   private serialize(
-    invoice: Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>,
+    invoice:
+      | Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>
+      | Prisma.InvoiceGetPayload<{ include: typeof invoiceListInclude }>,
   ) {
     const status = resolveInvoiceStatus({
-      currentStatus: invoice.status as InvoiceStatusName,
+      currentStatus: invoice.status,
       grossAmount: invoice.grossAmount.toString(),
       paidAmount: invoice.paidAmount.toString(),
       dueDate: invoice.dueDate,
     });
+
+    const items =
+      'items' in invoice && Array.isArray(invoice.items)
+        ? invoice.items.map((item) => ({
+            id: item.id,
+            description: item.description,
+            quantity: this.decimalToString(item.quantity),
+            unitPrice: this.decimalToString(item.unitPrice),
+            netAmount: this.decimalToString(item.netAmount),
+            sortOrder: item.sortOrder,
+          }))
+        : [];
 
     return {
       id: invoice.id,
@@ -109,14 +205,7 @@ export class InvoicesService {
       customer: invoice.customer,
       supplier: invoice.supplier,
       subcontractor: invoice.subcontractor,
-      items: invoice.items.map((item) => ({
-        id: item.id,
-        description: item.description,
-        quantity: this.decimalToString(item.quantity),
-        unitPrice: this.decimalToString(item.unitPrice),
-        netAmount: this.decimalToString(item.netAmount),
-        sortOrder: item.sortOrder,
-      })),
+      items,
     };
   }
 
@@ -128,7 +217,9 @@ export class InvoicesService {
   ) {
     if (type === InvoiceType.CUSTOMER) {
       if (!customerId) {
-        throw new BadRequestException('customerId is required for CUSTOMER invoices');
+        throw new BadRequestException(
+          'customerId is required for CUSTOMER invoices',
+        );
       }
       const customer = await this.prisma.customer.findFirst({
         where: { id: customerId, deletedAt: null },
@@ -203,7 +294,7 @@ export class InvoicesService {
       this.prisma.invoice.count({ where }),
       this.prisma.invoice.findMany({
         where,
-        include: invoiceInclude,
+        include: invoiceListInclude,
         orderBy: [{ issueDate: 'desc' }, { createdAt: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -231,7 +322,7 @@ export class InvoicesService {
     }
 
     const resolved = resolveInvoiceStatus({
-      currentStatus: invoice.status as InvoiceStatusName,
+      currentStatus: invoice.status,
       grossAmount: invoice.grossAmount.toString(),
       paidAmount: invoice.paidAmount.toString(),
       dueDate: invoice.dueDate,
@@ -243,10 +334,68 @@ export class InvoicesService {
         data: { status: resolved },
         include: invoiceInclude,
       });
+      await this.notifyIfNewlyOverdue(updated, invoice.status, 'system');
       return this.serialize(updated);
     }
 
     return this.serialize(invoice);
+  }
+
+  async renderPdf(id: string) {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id, deletedAt: null },
+      include: invoiceInclude,
+    });
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    const settings = await this.prisma.companySettings.findFirst();
+    const data = this.serialize(invoice);
+
+    const buffer = await buildPdfBuffer((doc) => {
+      doc.fontSize(18).text(settings?.companyName ?? 'FBM Counter', {
+        continued: false,
+      });
+      doc.moveDown(0.5);
+      doc.fontSize(14).text(`Rechnung ${data.invoiceNumber}`);
+      doc.fontSize(10).fillColor('#555');
+      doc.text(`Typ: ${data.type} · Status: ${data.status}`);
+      doc.text(
+        `Datum: ${data.issueDate.slice(0, 10)} · Fällig: ${data.dueDate.slice(0, 10)}`,
+      );
+      if (data.customer) doc.text(`Kunde: ${data.customer.companyName}`);
+      if (data.supplier) doc.text(`Lieferant: ${data.supplier.companyName}`);
+      if (data.project) {
+        doc.text(
+          `Projekt: ${data.project.projectNumber} — ${data.project.name}`,
+        );
+      }
+      doc.moveDown();
+      doc.fillColor('#000').fontSize(11).text('Positionen');
+      doc.moveDown(0.3);
+      for (const item of data.items) {
+        doc
+          .fontSize(10)
+          .text(
+            `${item.description} · Menge ${item.quantity} · ${item.netAmount} EUR`,
+          );
+      }
+      doc.moveDown();
+      doc.fontSize(11).text(`Netto: ${data.netAmount} EUR`);
+      doc.text(`MwSt. (${data.taxRate}%): ${data.taxAmount} EUR`);
+      doc.fontSize(12).text(`Brutto: ${data.grossAmount} EUR`);
+      doc.text(`Bezahlt: ${data.paidAmount} EUR`);
+      if (data.notes) {
+        doc.moveDown();
+        doc.fontSize(10).fillColor('#555').text(`Notiz: ${data.notes}`);
+      }
+    });
+
+    return {
+      filename: `${data.invoiceNumber}.pdf`,
+      buffer,
+    };
   }
 
   async create(dto: CreateInvoiceDto, actorId: string) {
@@ -267,21 +416,24 @@ export class InvoicesService {
       }
     }
 
-    const taxRate = dto.taxRate ?? '19';
-    const amounts = this.computeTax(dto.netAmount, taxRate);
     const items = this.mapItems(dto.items);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
+      const settings = await tx.companySettings.findFirst({
+        select: { defaultVatRate: true },
+      });
+      const taxRate =
+        dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
+      const amounts = this.computeTax(dto.netAmount, taxRate);
       const invoiceNumber =
         dto.invoiceNumber ?? (await this.nextInvoiceNumber(dto.type, tx));
 
-      const created = await tx.invoice.create({
+      const row = await tx.invoice.create({
         data: {
           invoiceNumber,
           type: dto.type,
           projectId: dto.projectId,
-          customerId:
-            dto.type === InvoiceType.CUSTOMER ? dto.customerId : null,
+          customerId: dto.type === InvoiceType.CUSTOMER ? dto.customerId : null,
           supplierId:
             dto.type === InvoiceType.SUPPLIER ? (dto.supplierId ?? null) : null,
           subcontractorId:
@@ -294,7 +446,7 @@ export class InvoicesService {
           taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
-          paidAmount: dto.paidAmount ?? '0',
+          paidAmount: '0',
           status: dto.status ?? InvoiceStatus.DRAFT,
           paymentTerms: dto.paymentTerms,
           notes: dto.notes,
@@ -308,18 +460,42 @@ export class InvoicesService {
           actorId,
           action: 'INVOICE_CREATED',
           entityType: 'Invoice',
-          entityId: created.id,
+          entityId: row.id,
           newValue: {
-            invoiceNumber: created.invoiceNumber,
-            type: created.type,
-            status: created.status,
-            netAmount: created.netAmount.toString(),
+            invoiceNumber: row.invoiceNumber,
+            type: row.type,
+            status: row.status,
+            netAmount: row.netAmount.toString(),
           },
         },
       });
 
-      return this.serialize(created);
+      const resolved = resolveInvoiceStatus({
+        currentStatus: row.status,
+        grossAmount: row.grossAmount.toString(),
+        paidAmount: row.paidAmount.toString(),
+        dueDate: row.dueDate,
+      });
+      const finalInvoice =
+        resolved !== row.status
+          ? await tx.invoice.update({
+              where: { id: row.id },
+              data: { status: resolved },
+              include: invoiceInclude,
+            })
+          : row;
+
+      await this.notifyIfNewlyOverdue(finalInvoice, null, actorId, tx);
+
+      return this.serialize(finalInvoice);
     });
+
+    await this.syncBudgetForInvoice({
+      type: created.type,
+      projectId: created.projectId,
+      actorId,
+    });
+    return created;
   }
 
   async update(id: string, dto: UpdateInvoiceDto, actorId: string) {
@@ -328,6 +504,17 @@ export class InvoicesService {
     });
     if (!existing) {
       throw new NotFoundException('Invoice not found');
+    }
+
+    try {
+      assertInvoiceFinancialEditAllowed(
+        existing.status,
+        dto as unknown as Record<string, unknown>,
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invoice update rejected',
+      );
     }
 
     const type = dto.type ?? existing.type;
@@ -354,6 +541,12 @@ export class InvoicesService {
       }
     }
 
+    const paymentAggregate = await this.prisma.payment.aggregate({
+      where: { invoiceId: id, deletedAt: null },
+      _sum: { amount: true },
+    });
+    const paidAmount = (paymentAggregate._sum.amount ?? money(0)).toString();
+
     const netAmount = dto.netAmount ?? existing.netAmount.toString();
     const taxRate = dto.taxRate ?? existing.taxRate.toString();
     const amounts =
@@ -364,11 +557,10 @@ export class InvoicesService {
             grossAmount: existing.grossAmount.toString(),
           };
 
-    const paidAmount = dto.paidAmount ?? existing.paidAmount.toString();
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : existing.dueDate;
     const requestedStatus = dto.status ?? existing.status;
     const status = resolveInvoiceStatus({
-      currentStatus: requestedStatus as InvoiceStatusName,
+      currentStatus: requestedStatus,
       grossAmount: amounts.grossAmount,
       paidAmount,
       dueDate,
@@ -376,12 +568,12 @@ export class InvoicesService {
 
     const items = this.mapItems(dto.items);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       if (items) {
         await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
       }
 
-      const updated = await tx.invoice.update({
+      const row = await tx.invoice.update({
         where: { id },
         data: {
           invoiceNumber: dto.invoiceNumber,
@@ -411,7 +603,7 @@ export class InvoicesService {
           taxRate: dto.taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
-          paidAmount: dto.paidAmount,
+          paidAmount,
           status,
           paymentTerms: dto.paymentTerms,
           notes: dto.notes,
@@ -432,15 +624,34 @@ export class InvoicesService {
             netAmount: existing.netAmount.toString(),
           },
           newValue: {
-            invoiceNumber: updated.invoiceNumber,
-            status: updated.status,
-            netAmount: updated.netAmount.toString(),
+            invoiceNumber: row.invoiceNumber,
+            status: row.status,
+            netAmount: row.netAmount.toString(),
           },
         },
       });
 
-      return this.serialize(updated);
+      await this.notifyIfNewlyOverdue(row, existing.status, actorId, tx);
+
+      return this.serialize(row);
     });
+
+    const projectsToSync = new Set<string>();
+    if (existing.type === InvoiceType.SUPPLIER && existing.projectId) {
+      projectsToSync.add(existing.projectId);
+    }
+    if (updated.type === InvoiceType.SUPPLIER && updated.projectId) {
+      projectsToSync.add(updated.projectId);
+    }
+    for (const projectId of projectsToSync) {
+      await this.syncBudgetForInvoice({
+        type: InvoiceType.SUPPLIER,
+        projectId,
+        actorId,
+      });
+    }
+
+    return updated;
   }
 
   async remove(id: string, actorId: string) {
@@ -449,6 +660,21 @@ export class InvoicesService {
     });
     if (!existing) {
       throw new NotFoundException('Invoice not found');
+    }
+
+    const paymentCount = await this.prisma.payment.count({
+      where: { invoiceId: id, deletedAt: null },
+    });
+
+    try {
+      assertInvoiceDeletable({
+        status: existing.status,
+        paymentCount,
+      });
+    } catch (error) {
+      throw new ConflictException(
+        error instanceof Error ? error.message : 'Invoice cannot be deleted',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -468,6 +694,12 @@ export class InvoicesService {
           },
         },
       });
+    });
+
+    await this.syncBudgetForInvoice({
+      type: existing.type,
+      projectId: existing.projectId,
+      actorId,
     });
 
     return { success: true };

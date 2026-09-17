@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
 } from '@nestjs/common';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
 import type { AuthUserDto } from '@fbm/shared';
@@ -37,6 +38,17 @@ export class InvoicesController {
       type,
       projectId,
       status,
+    });
+  }
+
+  @Get(':id/pdf')
+  @RequirePermissions('invoices:read')
+  async downloadPdf(@Param('id') id: string) {
+    const file = await this.invoicesService.renderPdf(id);
+    const encodedName = encodeURIComponent(file.filename);
+    return new StreamableFile(file.buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${file.filename}"; filename*=UTF-8''${encodedName}`,
     });
   }
 

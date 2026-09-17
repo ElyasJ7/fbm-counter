@@ -1,23 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { money } from '@fbm/financial-core';
+import { aggregateSupplierSpend } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateSupplierDto } from './dto/create-supplier.dto';
 import type { UpdateSupplierDto } from './dto/update-supplier.dto';
-
-const OPEN_INVOICE_STATUSES = [
-  'SENT',
-  'OPEN',
-  'PARTIALLY_PAID',
-  'OVERDUE',
-] as const;
-
-const OPEN_EXPENSE_STATUSES = [
-  'PENDING',
-  'APPROVED',
-  'PARTIALLY_PAID',
-  'OVERDUE',
-] as const;
 
 type MoneyTotals = {
   totalPurchases: string;
@@ -29,66 +15,37 @@ type MoneyTotals = {
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private moneyStr(value: ReturnType<typeof money>) {
-    return value.toDecimalPlaces(4).toFixed(4);
-  }
-
   private summarizeSupplier(
     invoices: Array<{
       status: string;
-      grossAmount: Prisma.Decimal;
-      paidAmount: Prisma.Decimal;
+      grossAmount: Prisma.Decimal | string;
+      paidAmount: Prisma.Decimal | string;
+      invoiceNumber?: string | null;
     }>,
     expenses: Array<{
       status: string;
-      grossAmount: Prisma.Decimal;
-      paidAmount: Prisma.Decimal;
+      grossAmount: Prisma.Decimal | string;
+      paidAmount: Prisma.Decimal | string;
+      invoiceNumber?: string | null;
     }>,
   ): MoneyTotals {
-    let totalPurchases = money(0);
-    let paidAmount = money(0);
-    let outstandingBalance = money(0);
-
-    for (const invoice of invoices) {
-      totalPurchases = totalPurchases.plus(invoice.grossAmount);
-      paidAmount = paidAmount.plus(invoice.paidAmount);
-      const remaining = money(invoice.grossAmount).minus(invoice.paidAmount);
-      if (
-        remaining.greaterThan(0) &&
-        OPEN_INVOICE_STATUSES.includes(
-          invoice.status as (typeof OPEN_INVOICE_STATUSES)[number],
-        )
-      ) {
-        outstandingBalance = outstandingBalance.plus(remaining);
-      }
-    }
-
-    for (const expense of expenses) {
-      totalPurchases = totalPurchases.plus(expense.grossAmount);
-      paidAmount = paidAmount.plus(expense.paidAmount);
-      const remaining = money(expense.grossAmount).minus(expense.paidAmount);
-      if (
-        remaining.greaterThan(0) &&
-        OPEN_EXPENSE_STATUSES.includes(
-          expense.status as (typeof OPEN_EXPENSE_STATUSES)[number],
-        )
-      ) {
-        outstandingBalance = outstandingBalance.plus(remaining);
-      }
-    }
-
-    return {
-      totalPurchases: this.moneyStr(totalPurchases),
-      paidAmount: this.moneyStr(paidAmount),
-      outstandingBalance: this.moneyStr(outstandingBalance),
-    };
+    return aggregateSupplierSpend({
+      supplierInvoices: invoices.map((invoice) => ({
+        status: invoice.status,
+        grossAmount: invoice.grossAmount.toString(),
+        paidAmount: invoice.paidAmount.toString(),
+        invoiceNumber: invoice.invoiceNumber,
+      })),
+      expenses: expenses.map((expense) => ({
+        status: expense.status,
+        grossAmount: expense.grossAmount.toString(),
+        paidAmount: expense.paidAmount.toString(),
+        invoiceNumber: expense.invoiceNumber,
+      })),
+    });
   }
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-  }) {
+  async findAll(params: { page?: number; pageSize?: number; search?: string }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const search = params.search?.trim();
@@ -142,6 +99,7 @@ export class SuppliersService {
           status: true,
           grossAmount: true,
           paidAmount: true,
+          invoiceNumber: true,
         },
       }),
       this.prisma.expense.findMany({
@@ -155,6 +113,7 @@ export class SuppliersService {
           status: true,
           grossAmount: true,
           paidAmount: true,
+          invoiceNumber: true,
         },
       }),
     ]);
@@ -227,7 +186,12 @@ export class SuppliersService {
           deletedAt: null,
           status: { not: 'CANCELLED' },
         },
-        select: { status: true, grossAmount: true, paidAmount: true },
+        select: {
+          status: true,
+          grossAmount: true,
+          paidAmount: true,
+          invoiceNumber: true,
+        },
       }),
       this.prisma.expense.findMany({
         where: {
@@ -235,7 +199,12 @@ export class SuppliersService {
           deletedAt: null,
           status: { not: 'CANCELLED' },
         },
-        select: { status: true, grossAmount: true, paidAmount: true },
+        select: {
+          status: true,
+          grossAmount: true,
+          paidAmount: true,
+          invoiceNumber: true,
+        },
       }),
     ]);
 

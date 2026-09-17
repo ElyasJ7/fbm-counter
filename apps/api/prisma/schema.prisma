@@ -90,6 +90,17 @@ enum SubcontractorTrade {
   OTHER
 }
 
+enum DocumentCategory {
+  CONTRACT
+  INVOICE
+  RECEIPT
+  PLAN
+  PHOTO
+  CERTIFICATE
+  CORRESPONDENCE
+  OTHER
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -107,6 +118,7 @@ model User {
   auditLogs         AuditLog[]     @relation("AuditActor")
   notifications     Notification[]
   managedProjects   Project[]      @relation("ProjectManager")
+  uploadedDocuments Document[]     @relation("DocumentUploader")
 
   @@index([role])
   @@index([status])
@@ -271,6 +283,7 @@ model Project {
   invoices         Invoice[]
   payments         Payment[]
   subcontractors   ProjectSubcontractor[]
+  documents        Document[]
 
   @@index([status])
   @@index([customerId])
@@ -372,6 +385,7 @@ model Expense {
   @@index([status])
   @@index([dueDate])
   @@index([deletedAt])
+  @@index([deletedAt, status, invoiceDate])
   @@map("expenses")
 }
 
@@ -412,6 +426,8 @@ model Invoice {
   @@index([status])
   @@index([dueDate])
   @@index([deletedAt])
+  @@index([deletedAt, type, status])
+  @@index([deletedAt, projectId, issueDate])
   @@map("invoices")
 }
 
@@ -451,5 +467,31 @@ model Payment {
   @@index([projectId])
   @@index([paymentDate])
   @@index([deletedAt])
+  @@index([deletedAt, paymentDate])
   @@map("payments")
+}
+
+model Document {
+  id               String           @id @default(cuid())
+  title            String?
+  originalFileName String
+  storageKey       String           @unique
+  mimeType         String
+  sizeBytes        Int
+  category         DocumentCategory @default(OTHER)
+  description      String?
+  projectId        String?
+  project          Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  uploadedById     String
+  uploadedBy       User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  @@index([projectId])
+  @@index([uploadedById])
+  @@index([category])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("documents")
 }

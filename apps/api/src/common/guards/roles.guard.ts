@@ -11,10 +11,7 @@ import {
   type Permission,
   type Role,
 } from '@fbm/shared';
-import {
-  PERMISSIONS_KEY,
-  ROLES_KEY,
-} from '../decorators/auth.decorators';
+import { PERMISSIONS_KEY, ROLES_KEY } from '../decorators/auth.decorators';
 
 @Injectable()
 export class RolesGuard implements CanActivate {

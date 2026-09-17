@@ -7,11 +7,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import {
-  BudgetCategory,
-  ExpenseStatus,
-  PaymentMethod,
-} from '@prisma/client';
+import { BudgetCategory, ExpenseStatus, PaymentMethod } from '@prisma/client';
 
 export class UpdateExpenseDto {
   @IsOptional()

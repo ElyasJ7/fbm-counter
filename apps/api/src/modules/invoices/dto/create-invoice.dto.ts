@@ -76,10 +76,6 @@ export class CreateInvoiceDto {
   taxRate?: string;
 
   @IsOptional()
-  @IsNumberString()
-  paidAmount?: string;
-
-  @IsOptional()
   @IsEnum(InvoiceStatus)
   status?: InvoiceStatus;
 

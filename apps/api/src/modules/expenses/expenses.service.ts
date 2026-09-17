@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ExpenseStatus, Prisma } from '@prisma/client';
+import { ExpenseStatus, Prisma, Role } from '@prisma/client';
 import {
   calculateGrossAmount,
   calculateTaxAmount,
@@ -12,6 +12,8 @@ import {
   type ExpenseStatusName,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
+import { BudgetsService } from '../budgets/budgets.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CreateExpenseDto } from './dto/create-expense.dto';
 import type { UpdateExpenseDto } from './dto/update-expense.dto';
 
@@ -22,7 +24,11 @@ const expenseInclude = {
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly budgets: BudgetsService,
+  ) {}
 
   private decimalToString(value: Prisma.Decimal | string | number): string {
     return value.toString();
@@ -55,7 +61,7 @@ export class ExpensesService {
     expense: Prisma.ExpenseGetPayload<{ include: typeof expenseInclude }>,
   ) {
     const status = resolveExpenseStatus({
-      currentStatus: expense.status as ExpenseStatusName,
+      currentStatus: expense.status,
       grossAmount: expense.grossAmount.toString(),
       paidAmount: expense.paidAmount.toString(),
       dueDate: expense.dueDate,
@@ -165,7 +171,7 @@ export class ExpensesService {
     }
 
     const resolved = resolveExpenseStatus({
-      currentStatus: expense.status as ExpenseStatusName,
+      currentStatus: expense.status,
       grossAmount: expense.grossAmount.toString(),
       paidAmount: expense.paidAmount.toString(),
       dueDate: expense.dueDate,
@@ -196,14 +202,17 @@ export class ExpensesService {
       }
     }
 
-    const taxRate = dto.taxRate ?? '19';
-    const amounts = this.computeTax(dto.netAmount, taxRate);
-
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
+      const settings = await tx.companySettings.findFirst({
+        select: { defaultVatRate: true },
+      });
+      const taxRate =
+        dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
+      const amounts = this.computeTax(dto.netAmount, taxRate);
       const expenseNumber =
         dto.expenseNumber ?? (await this.nextExpenseNumber(tx));
 
-      const created = await tx.expense.create({
+      const row = await tx.expense.create({
         data: {
           expenseNumber,
           projectId: dto.projectId,
@@ -219,9 +228,7 @@ export class ExpensesService {
           grossAmount: amounts.grossAmount,
           paidAmount: dto.paidAmount ?? '0',
           status: dto.status ?? ExpenseStatus.DRAFT,
-          paymentDate: dto.paymentDate
-            ? new Date(dto.paymentDate)
-            : undefined,
+          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
           paymentMethod: dto.paymentMethod,
           notes: dto.notes,
         },
@@ -233,17 +240,24 @@ export class ExpensesService {
           actorId,
           action: 'EXPENSE_CREATED',
           entityType: 'Expense',
-          entityId: created.id,
+          entityId: row.id,
           newValue: {
-            expenseNumber: created.expenseNumber,
-            netAmount: created.netAmount.toString(),
-            status: created.status,
+            expenseNumber: row.expenseNumber,
+            netAmount: row.netAmount.toString(),
+            status: row.status,
           },
         },
       });
 
-      return this.serialize(created);
+      return this.serialize(row);
     });
+
+    if (created.projectId) {
+      await this.budgets
+        .syncAndNotifyOverruns(created.projectId, actorId)
+        .catch(() => undefined);
+    }
+    return created;
   }
 
   async update(id: string, dto: UpdateExpenseDto, actorId: string) {
@@ -288,14 +302,14 @@ export class ExpensesService {
           : null;
     const requestedStatus = dto.status ?? existing.status;
     const status = resolveExpenseStatus({
-      currentStatus: requestedStatus as ExpenseStatusName,
+      currentStatus: requestedStatus,
       grossAmount: amounts.grossAmount,
       paidAmount,
       dueDate,
     });
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.expense.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.expense.update({
         where: { id },
         data: {
           expenseNumber: dto.expenseNumber,
@@ -346,15 +360,27 @@ export class ExpensesService {
             netAmount: existing.netAmount.toString(),
           },
           newValue: {
-            expenseNumber: updated.expenseNumber,
-            status: updated.status,
-            netAmount: updated.netAmount.toString(),
+            expenseNumber: row.expenseNumber,
+            status: row.status,
+            netAmount: row.netAmount.toString(),
           },
         },
       });
 
-      return this.serialize(updated);
+      return this.serialize(row);
     });
+
+    const projectIds = new Set(
+      [existing.projectId, updated.projectId].filter((id): id is string =>
+        Boolean(id),
+      ),
+    );
+    for (const projectId of projectIds) {
+      await this.budgets
+        .syncAndNotifyOverruns(projectId, actorId)
+        .catch(() => undefined);
+    }
+    return updated;
   }
 
   async approve(id: string, actorId: string) {
@@ -380,7 +406,7 @@ export class ExpensesService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const approved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.expense.update({
         where: { id },
         data: { status: ExpenseStatus.APPROVED },
@@ -398,8 +424,43 @@ export class ExpensesService {
         },
       });
 
+      const projectLabel = updated.project
+        ? `${updated.project.projectNumber} — ${updated.project.name}`
+        : 'ohne Projekt';
+      await this.notifications.notifyProjectManager(
+        updated.projectId,
+        {
+          title: 'Ausgabe freigegeben',
+          message: `${updated.expenseNumber} (${updated.description}) wurde freigegeben · ${projectLabel}`,
+          type: 'expense.approved',
+          link: updated.projectId
+            ? `/projects/${updated.projectId}?tab=expenses`
+            : '/expenses',
+        },
+        { excludeUserId: actorId, tx },
+      );
+      if (!updated.projectId) {
+        await this.notifications.createForRoles(
+          [Role.ACCOUNTING, Role.MANAGEMENT],
+          {
+            title: 'Ausgabe freigegeben',
+            message: `${updated.expenseNumber} (${updated.description}) wurde freigegeben`,
+            type: 'expense.approved',
+            link: '/expenses',
+          },
+          { excludeUserId: actorId, tx },
+        );
+      }
+
       return this.serialize(updated);
     });
+
+    if (approved.projectId) {
+      await this.budgets
+        .syncAndNotifyOverruns(approved.projectId, actorId)
+        .catch(() => undefined);
+    }
+    return approved;
   }
 
   async remove(id: string, actorId: string) {
@@ -428,6 +489,12 @@ export class ExpensesService {
         },
       });
     });
+
+    if (existing.projectId) {
+      await this.budgets
+        .syncAndNotifyOverruns(existing.projectId, actorId)
+        .catch(() => undefined);
+    }
 
     return { success: true };
   }

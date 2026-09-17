@@ -17,7 +17,9 @@ import {
   type InvoiceStatusName,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
+import { BudgetsService } from '../budgets/budgets.service';
 import type { CreatePaymentDto } from './dto/create-payment.dto';
+import { lockInvoiceForUpdate, sumValidPaymentAmount } from './payment-locking';
 
 const paymentInclude = {
   invoice: {
@@ -33,7 +35,20 @@ const paymentInclude = {
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly budgets: BudgetsService,
+  ) {}
+
+  private async syncBudgetAfterSupplierPayment(
+    invoice: { type: string; projectId: string | null },
+    actorId: string,
+  ) {
+    if (invoice.type !== InvoiceType.SUPPLIER || !invoice.projectId) return;
+    await this.budgets
+      .syncAndNotifyOverruns(invoice.projectId, actorId)
+      .catch(() => undefined);
+  }
 
   private decimalToString(value: Prisma.Decimal | string | number): string {
     return value.toString();
@@ -126,10 +141,8 @@ export class PaymentsService {
   }
 
   async create(dto: CreatePaymentDto, actorId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.findFirst({
-        where: { id: dto.invoiceId, deletedAt: null },
-      });
+    const result = await this.prisma.$transaction(async (tx) => {
+      const invoice = await lockInvoiceForUpdate(tx, dto.invoiceId);
       if (!invoice) {
         throw new NotFoundException('Invoice not found');
       }
@@ -152,11 +165,13 @@ export class PaymentsService {
         }
       }
 
+      const currentPaid = await sumValidPaymentAmount(tx, invoice.id);
+
       let applied;
       try {
         applied = applyPaymentToInvoice({
           grossAmount: invoice.grossAmount.toString(),
-          paidAmount: invoice.paidAmount.toString(),
+          paidAmount: currentPaid,
           paymentAmount: dto.amount,
           currentStatus: invoice.status as InvoiceStatusName,
           dueDate: invoice.dueDate,
@@ -191,10 +206,17 @@ export class PaymentsService {
         include: paymentInclude,
       });
 
+      const derivedPaid = await sumValidPaymentAmount(tx, invoice.id);
+      if (!money(derivedPaid).equals(money(applied.newPaidAmount))) {
+        throw new BadRequestException(
+          'Payment total mismatch after insert; aborting',
+        );
+      }
+
       await tx.invoice.update({
         where: { id: invoice.id },
         data: {
-          paidAmount: applied.newPaidAmount,
+          paidAmount: derivedPaid,
           status: applied.status,
         },
       });
@@ -214,12 +236,15 @@ export class PaymentsService {
         },
       });
 
-      return this.serialize(payment);
+      return { payment: this.serialize(payment), invoice };
     });
+
+    await this.syncBudgetAfterSupplierPayment(result.invoice, actorId);
+    return result.payment;
   }
 
   async remove(id: string, actorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findFirst({
         where: { id, deletedAt: null },
       });
@@ -227,23 +252,18 @@ export class PaymentsService {
         throw new NotFoundException('Payment not found');
       }
 
-      const invoice = await tx.invoice.findFirst({
-        where: { id: payment.invoiceId, deletedAt: null },
-      });
+      const invoice = await lockInvoiceForUpdate(tx, payment.invoiceId);
       if (!invoice) {
         throw new NotFoundException('Invoice not found');
       }
 
-      const newPaid = money(invoice.paidAmount)
-        .minus(payment.amount)
-        .toDecimalPlaces(4);
-      if (newPaid.isNegative()) {
-        throw new BadRequestException(
-          'Cannot reverse payment: invoice paid amount would become negative',
-        );
-      }
+      await tx.payment.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
 
-      const newPaidAmount = newPaid.toFixed(4);
+      const newPaidAmount = await sumValidPaymentAmount(tx, invoice.id);
+
       const status = resolveInvoiceStatus({
         currentStatus:
           invoice.status === InvoiceStatus.DRAFT
@@ -252,11 +272,6 @@ export class PaymentsService {
         grossAmount: invoice.grossAmount.toString(),
         paidAmount: newPaidAmount,
         dueDate: invoice.dueDate,
-      });
-
-      await tx.payment.update({
-        where: { id },
-        data: { deletedAt: new Date() },
       });
 
       await tx.invoice.update({
@@ -285,7 +300,10 @@ export class PaymentsService {
         },
       });
 
-      return { success: true };
+      return { success: true as const, invoice };
     });
+
+    await this.syncBudgetAfterSupplierPayment(result.invoice, actorId);
+    return { success: result.success };
   }
 }

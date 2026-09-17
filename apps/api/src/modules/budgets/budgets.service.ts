@@ -1,19 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BudgetCategory, Prisma } from '@prisma/client';
-import { computeBudgetLine, money } from '@fbm/financial-core';
+import { Prisma, Role } from '@prisma/client';
+import {
+  BUDGET_CATEGORY_LABELS,
+  type BudgetCategory as SharedBudgetCategory,
+} from '@fbm/shared';
+import { aggregateCosts, computeBudgetLine, money } from '@fbm/financial-core';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertBudgetLinesDto } from './dto/upsert-budget-lines.dto';
 
-const OPEN_EXPENSE_STATUSES = [
-  'PENDING',
-  'APPROVED',
-  'PARTIALLY_PAID',
-  'OVERDUE',
-] as const;
-
 @Injectable()
 export class BudgetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async assertProject(projectId: string) {
     const project = await this.prisma.project.findFirst({
@@ -25,19 +26,17 @@ export class BudgetsService {
     }
   }
 
-  private serializeLine(
-    line: {
-      id: string;
-      projectId: string;
-      category: string;
-      plannedAmount: Prisma.Decimal;
-      committedAmount: Prisma.Decimal;
-      actualAmount: Prisma.Decimal;
-      notes: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    },
-  ) {
+  private serializeLine(line: {
+    id: string;
+    projectId: string;
+    category: string;
+    plannedAmount: Prisma.Decimal;
+    committedAmount: Prisma.Decimal;
+    actualAmount: Prisma.Decimal;
+    notes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
     const computed = computeBudgetLine({
       plannedAmount: line.plannedAmount.toString(),
       committedAmount: line.committedAmount.toString(),
@@ -54,56 +53,145 @@ export class BudgetsService {
     };
   }
 
-  /** Optionally roll actual/committed from project expenses by category. */
-  private async syncAmountsFromExpenses(projectId: string) {
-    const expenses = await this.prisma.expense.findMany({
-      where: {
-        projectId,
-        deletedAt: null,
-        status: { not: 'CANCELLED' },
-      },
-      select: {
-        category: true,
-        status: true,
-        grossAmount: true,
-        paidAmount: true,
-      },
-    });
-
-    const byCategory = new Map<
-      string,
-      { actual: ReturnType<typeof money>; committed: ReturnType<typeof money> }
-    >();
-
-    for (const expense of expenses) {
-      const entry = byCategory.get(expense.category) ?? {
-        actual: money(0),
-        committed: money(0),
-      };
-      entry.actual = entry.actual.plus(expense.paidAmount);
-      if (
-        OPEN_EXPENSE_STATUSES.includes(
-          expense.status as (typeof OPEN_EXPENSE_STATUSES)[number],
-        )
-      ) {
-        entry.committed = entry.committed.plus(
-          money(expense.grossAmount).minus(expense.paidAmount),
-        );
-      }
-      byCategory.set(expense.category, entry);
-    }
-
-    for (const [category, amounts] of byCategory) {
-      await this.prisma.budgetLine.updateMany({
+  /**
+   * Roll actual/committed from canonical cost policy (supplier invoices +
+   * non-duplicate expenses). Supplier invoice amounts land in OTHER.
+   */
+  private async syncAmountsFromCosts(projectId: string) {
+    const [expenses, supplierInvoices, lines] = await Promise.all([
+      this.prisma.expense.findMany({
         where: {
           projectId,
-          category: category as BudgetCategory,
+          deletedAt: null,
+          status: { not: 'CANCELLED' },
         },
+        select: {
+          category: true,
+          status: true,
+          grossAmount: true,
+          paidAmount: true,
+          invoiceNumber: true,
+        },
+      }),
+      this.prisma.invoice.findMany({
+        where: {
+          projectId,
+          deletedAt: null,
+          type: 'SUPPLIER',
+          status: { notIn: ['CANCELLED', 'DRAFT'] },
+        },
+        select: {
+          status: true,
+          grossAmount: true,
+          paidAmount: true,
+          invoiceNumber: true,
+        },
+      }),
+      this.prisma.budgetLine.findMany({
+        where: { projectId },
+        select: { id: true, category: true },
+      }),
+    ]);
+
+    const costs = aggregateCosts({
+      expenses: expenses.map((row) => ({
+        status: row.status,
+        grossAmount: row.grossAmount.toString(),
+        paidAmount: row.paidAmount.toString(),
+        invoiceNumber: row.invoiceNumber,
+        category: row.category,
+      })),
+      supplierInvoices: supplierInvoices.map((row) => ({
+        status: row.status,
+        grossAmount: row.grossAmount.toString(),
+        paidAmount: row.paidAmount.toString(),
+        invoiceNumber: row.invoiceNumber,
+      })),
+    });
+
+    for (const line of lines) {
+      const amounts = costs.byCategory[line.category] ?? {
+        actual: '0.0000',
+        committed: '0.0000',
+      };
+      await this.prisma.budgetLine.update({
+        where: { id: line.id },
         data: {
-          actualAmount: amounts.actual.toFixed(4),
-          committedAmount: amounts.committed.toFixed(4),
+          actualAmount: amounts.actual,
+          committedAmount: amounts.committed,
         },
       });
+    }
+  }
+
+  /** Sync cost totals into budget lines and notify on newly detected overruns. */
+  async syncAndNotifyOverruns(projectId: string, actorId?: string) {
+    await this.assertProject(projectId);
+    await this.syncAmountsFromCosts(projectId);
+
+    const [project, lines] = await Promise.all([
+      this.prisma.project.findFirst({
+        where: { id: projectId, deletedAt: null },
+        select: {
+          id: true,
+          projectNumber: true,
+          name: true,
+          projectManagerId: true,
+        },
+      }),
+      this.prisma.budgetLine.findMany({ where: { projectId } }),
+    ]);
+    if (!project) return;
+
+    for (const line of lines) {
+      const computed = computeBudgetLine({
+        plannedAmount: line.plannedAmount.toString(),
+        committedAmount: line.committedAmount.toString(),
+        actualAmount: line.actualAmount.toString(),
+      });
+      const remaining = money(computed.remainingAmount);
+      if (!remaining.lessThan(0)) continue;
+
+      const link = `/projects/${projectId}?tab=budget`;
+      const type = 'budget.overrun';
+      const categoryLabel =
+        BUDGET_CATEGORY_LABELS[line.category] ?? line.category;
+
+      const recipients = new Set<string>();
+      if (project.projectManagerId && project.projectManagerId !== actorId) {
+        recipients.add(project.projectManagerId);
+      }
+
+      const managers = await this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          status: 'ACTIVE',
+          role: { in: [Role.MANAGEMENT, Role.ACCOUNTING] },
+          ...(actorId ? { id: { not: actorId } } : {}),
+        },
+        select: { id: true },
+      });
+      for (const user of managers) recipients.add(user.id);
+
+      for (const userId of recipients) {
+        const existing = await this.prisma.notification.findFirst({
+          where: {
+            userId,
+            type,
+            link,
+            readAt: null,
+            message: { contains: categoryLabel },
+          },
+        });
+        if (existing) continue;
+
+        await this.notifications.createForUsers([userId], {
+          title: 'Budget überschritten',
+          message: `${project.projectNumber}: Kategorie ${categoryLabel} ist überzogen (Rest ${computed.remainingAmount}).`,
+          type,
+          link,
+        });
+      }
     }
   }
 
@@ -111,7 +199,7 @@ export class BudgetsService {
     await this.assertProject(projectId);
 
     if (syncFromExpenses) {
-      await this.syncAmountsFromExpenses(projectId);
+      await this.syncAmountsFromCosts(projectId);
     }
 
     const lines = await this.prisma.budgetLine.findMany({

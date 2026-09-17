@@ -1,16 +1,21 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './layouts/AppLayout';
+import { AuditLogsPage } from './pages/AuditLogsPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { DocumentsPage } from './pages/DocumentsPage';
 import { ExpensesPage } from './pages/ExpensesPage';
+import { FinancesPage } from './pages/FinancesPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { LoginPage } from './pages/LoginPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { PaymentsPage } from './pages/PaymentsPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectFormPage } from './pages/ProjectFormPage';
 import { ProjectsPage } from './pages/ProjectsPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { SubcontractorDetailPage } from './pages/SubcontractorDetailPage';
 import { SubcontractorsPage } from './pages/SubcontractorsPage';
 import { SupplierDetailPage } from './pages/SupplierDetailPage';
@@ -30,16 +35,7 @@ export default function App() {
             <Route path="projects/:id" element={<ProjectDetailPage />} />
             <Route path="projects/:id/edit" element={<ProjectFormPage />} />
             <Route path="customers" element={<CustomersPage />} />
-            <Route
-              path="finances"
-              element={
-                <PlaceholderPage
-                  title="Finances"
-                  description="Company-wide financial overview and ledgers."
-                  phase="Phase 4"
-                />
-              }
-            />
+            <Route path="finances" element={<FinancesPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="expenses" element={<ExpensesPage />} />
@@ -50,37 +46,12 @@ export default function App() {
               path="subcontractors/:id"
               element={<SubcontractorDetailPage />}
             />
-            <Route
-              path="documents"
-              element={
-                <PlaceholderPage
-                  title="Documents"
-                  description="Secure document storage linked to projects and records."
-                  phase="Phase 6"
-                />
-              }
-            />
-            <Route
-              path="reports"
-              element={
-                <PlaceholderPage
-                  title="Reports"
-                  description="Profitability, cash flow, and exportable financial reports."
-                  phase="Phase 7"
-                />
-              }
-            />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="users" element={<UsersPage />} />
-            <Route
-              path="settings"
-              element={
-                <PlaceholderPage
-                  title="Settings"
-                  description="Company profile, VAT defaults, and system configuration."
-                  phase="Phase 8"
-                />
-              }
-            />
+            <Route path="audit" element={<AuditLogsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

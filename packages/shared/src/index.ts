@@ -540,3 +540,216 @@ export type SubcontractorDetailDto = SubcontractorDto & {
   }>;
   invoices: InvoiceDto[];
 };
+
+export const DOCUMENT_CATEGORIES = [
+  'CONTRACT',
+  'INVOICE',
+  'RECEIPT',
+  'PLAN',
+  'PHOTO',
+  'CERTIFICATE',
+  'CORRESPONDENCE',
+  'OTHER',
+] as const;
+
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  CONTRACT: 'Vertrag',
+  INVOICE: 'Rechnung',
+  RECEIPT: 'Beleg',
+  PLAN: 'Plan',
+  PHOTO: 'Foto',
+  CERTIFICATE: 'Zertifikat',
+  CORRESPONDENCE: 'Korrespondenz',
+  OTHER: 'Sonstiges',
+};
+
+export type DocumentUploaderDto = {
+  id: string;
+  firstName: string;
+  lastName: string;
+};
+
+export type DocumentDto = {
+  id: string;
+  title: string | null;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  category: DocumentCategory;
+  description: string | null;
+  projectId: string | null;
+  uploadedById: string;
+  createdAt: string;
+  updatedAt: string;
+  project: ProjectRefDto | null;
+  uploadedBy: DocumentUploaderDto;
+};
+
+export const REPORT_EXPORT_TYPES = [
+  'summary',
+  'profitability',
+  'cashflow',
+] as const;
+
+export type ReportExportType = (typeof REPORT_EXPORT_TYPES)[number];
+
+export type ReportPeriodDto = {
+  from: string | null;
+  to: string | null;
+};
+
+export type ReportKpisDto = {
+  totalRevenue: string;
+  totalExpenses: string;
+  grossProfit: string;
+  netProfit: string;
+  availableCash: string;
+  outstandingCustomerInvoices: string;
+  outstandingSupplierInvoices: string;
+  activeProjects: number;
+  totalProjectValue: string;
+  totalBudget: string;
+  budgetUtilizationPercent: string | null;
+};
+
+export type ReportCashFlowMonthDto = {
+  month: string;
+  inflow: string;
+  outflow: string;
+  net: string;
+};
+
+export type ReportProjectProfitabilityDto = {
+  projectId: string;
+  projectNumber: string;
+  name: string;
+  status: ProjectStatus;
+  revenue: string;
+  costs: string;
+  profit: string;
+  profitMarginPercent: string | null;
+  contractValue: string;
+  currentBudget: string;
+};
+
+export type ReportExpenseCategoryDto = {
+  category: BudgetCategory;
+  amount: string;
+};
+
+export type ReportsSummaryDto = {
+  currency: string;
+  generatedAt: string;
+  period: ReportPeriodDto;
+  kpis: ReportKpisDto;
+  monthlyCashFlow: ReportCashFlowMonthDto[];
+  projectProfitability: ReportProjectProfitabilityDto[];
+  expensesByCategory: ReportExpenseCategoryDto[];
+};
+
+export type CompanySettingsDto = {
+  id: string;
+  companyName: string;
+  legalName: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string;
+  vatId: string | null;
+  taxNumber: string | null;
+  iban: string | null;
+  bic: string | null;
+  defaultCurrency: string;
+  defaultVatRate: string;
+  invoicePrefix: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const USER_STATUSES = ['ACTIVE', 'INACTIVE', 'INVITED'] as const;
+
+export type UserStatus = (typeof USER_STATUSES)[number];
+
+export const USER_STATUS_LABELS: Record<UserStatus, string> = {
+  ACTIVE: 'Aktiv',
+  INACTIVE: 'Inaktiv',
+  INVITED: 'Eingeladen',
+};
+
+export type UserDto = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: Role;
+  status: UserStatus;
+  lastLoginAt: string | null;
+  createdAt: string;
+};
+
+export type ProjectSubcontractorLinkDto = {
+  id: string;
+  contractValue: string;
+  notes: string | null;
+  subcontractor: {
+    id: string;
+    companyName: string;
+    trade: SubcontractorTrade;
+    contactPerson: string | null;
+    email: string | null;
+    phone: string | null;
+  };
+};
+
+export type AuditActivityDto = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  createdAt: string;
+  actor: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+};
+
+export type AuditLogDto = AuditActivityDto & {
+  ipAddress: string | null;
+  userAgent: string | null;
+  previousValue: unknown | null;
+  newValue: unknown | null;
+};
+
+export type NotificationDto = {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type SearchHitDto = {
+  type:
+    | 'project'
+    | 'invoice'
+    | 'customer'
+    | 'supplier'
+    | 'subcontractor'
+    | 'document'
+    | 'expense';
+  id: string;
+  title: string;
+  subtitle: string | null;
+  link: string;
+};
+
+export type SearchResponseDto = {
+  query: string;
+  results: SearchHitDto[];
+};

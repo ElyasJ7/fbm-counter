@@ -8,6 +8,9 @@ import { Input } from '../components/ui/Input';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
+import { getLoginFieldDefaults } from './login-defaults';
+
+const loginDefaults = getLoginFieldDefaults(import.meta.env.DEV);
 
 export function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -17,8 +20,8 @@ export function LoginPage() {
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
     '/';
 
-  const [email, setEmail] = useState('admin@musterbau.example');
-  const [password, setPassword] = useState('Admin123!');
+  const [email, setEmail] = useState(loginDefaults.email);
+  const [password, setPassword] = useState(loginDefaults.password);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

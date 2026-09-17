@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { money } from '@fbm/financial-core';
+import { aggregateCosts, money } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 
 const OPEN_INVOICE_STATUSES = [
@@ -80,6 +80,7 @@ export class DashboardService {
           status: true,
           grossAmount: true,
           paidAmount: true,
+          invoiceNumber: true,
         },
       }),
       this.prisma.expense.findMany({
@@ -90,6 +91,7 @@ export class DashboardService {
           status: true,
           grossAmount: true,
           paidAmount: true,
+          invoiceNumber: true,
           invoiceDate: true,
           createdAt: true,
         },
@@ -134,23 +136,23 @@ export class DashboardService {
       }
     }
 
-    let totalExpensePaid = money(0);
-    let outstandingSupplier = money(0);
-    for (const inv of supplierInvoices) {
-      totalExpensePaid = totalExpensePaid.plus(inv.paidAmount);
-      const remaining = money(inv.grossAmount).minus(inv.paidAmount);
-      if (
-        remaining.greaterThan(0) &&
-        OPEN_INVOICE_STATUSES.includes(
-          inv.status as (typeof OPEN_INVOICE_STATUSES)[number],
-        )
-      ) {
-        outstandingSupplier = outstandingSupplier.plus(remaining);
-      }
-    }
-    for (const expense of expenses) {
-      totalExpensePaid = totalExpensePaid.plus(expense.paidAmount);
-    }
+    const companyCosts = aggregateCosts({
+      supplierInvoices: supplierInvoices.map((inv) => ({
+        status: inv.status,
+        grossAmount: inv.grossAmount.toString(),
+        paidAmount: inv.paidAmount.toString(),
+        invoiceNumber: inv.invoiceNumber,
+      })),
+      expenses: expenses.map((expense) => ({
+        status: expense.status,
+        grossAmount: expense.grossAmount.toString(),
+        paidAmount: expense.paidAmount.toString(),
+        invoiceNumber: expense.invoiceNumber,
+        category: expense.category,
+      })),
+    });
+    const totalExpensePaid = money(companyCosts.actualCosts);
+    const outstandingSupplier = money(companyCosts.accountsPayable);
 
     const grossProfit = totalRevenue.minus(totalExpensePaid);
     // No separate overhead ledger yet — net equals gross until Phase 8+ settings.
@@ -187,7 +189,12 @@ export class DashboardService {
     const monthlyMap = new Map(
       months.map((key) => [
         key,
-        { revenue: money(0), expenses: money(0), cashIn: money(0), cashOut: money(0) },
+        {
+          revenue: money(0),
+          expenses: money(0),
+          cashIn: money(0),
+          cashOut: money(0),
+        },
       ]),
     );
 
@@ -249,16 +256,30 @@ export class DashboardService {
     const projectProfitability = [];
     for (const project of projects) {
       let revenue = money(0);
-      let costs = money(0);
       for (const inv of customerInvoices) {
-        if (inv.projectId === project.id) revenue = revenue.plus(inv.paidAmount);
+        if (inv.projectId === project.id)
+          revenue = revenue.plus(inv.paidAmount);
       }
-      for (const inv of supplierInvoices) {
-        if (inv.projectId === project.id) costs = costs.plus(inv.paidAmount);
-      }
-      for (const expense of expenses) {
-        if (expense.projectId === project.id) costs = costs.plus(expense.paidAmount);
-      }
+      const projectCosts = aggregateCosts({
+        supplierInvoices: supplierInvoices
+          .filter((inv) => inv.projectId === project.id)
+          .map((inv) => ({
+            status: inv.status,
+            grossAmount: inv.grossAmount.toString(),
+            paidAmount: inv.paidAmount.toString(),
+            invoiceNumber: inv.invoiceNumber,
+          })),
+        expenses: expenses
+          .filter((expense) => expense.projectId === project.id)
+          .map((expense) => ({
+            status: expense.status,
+            grossAmount: expense.grossAmount.toString(),
+            paidAmount: expense.paidAmount.toString(),
+            invoiceNumber: expense.invoiceNumber,
+            category: expense.category,
+          })),
+      });
+      const costs = money(projectCosts.actualCosts);
       projectProfitability.push({
         projectId: project.id,
         projectNumber: project.projectNumber,
@@ -273,16 +294,12 @@ export class DashboardService {
       money(b.profit).comparedTo(money(a.profit)),
     );
 
-    const categoryMap = new Map<string, ReturnType<typeof money>>();
-    for (const expense of expenses) {
-      const current = categoryMap.get(expense.category) ?? money(0);
-      categoryMap.set(expense.category, current.plus(expense.paidAmount));
-    }
-    const expensesByCategory = [...categoryMap.entries()]
-      .map(([category, amount]) => ({
+    const expensesByCategory = Object.entries(companyCosts.byCategory)
+      .map(([category, amounts]) => ({
         category,
-        amount: this.moneyStr(amount),
+        amount: amounts.actual,
       }))
+      .filter((row) => !money(row.amount).isZero())
       .sort((a, b) => money(b.amount).comparedTo(money(a.amount)));
 
     let plannedBudget = money(0);

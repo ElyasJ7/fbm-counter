@@ -1,9 +1,11 @@
 import type {
+  AuditActivityDto,
   CustomerDto,
   PaginatedResponse,
   ProjectDetailDto,
   ProjectListItemDto,
   ProjectStatus,
+  ProjectSubcontractorLinkDto,
 } from '@fbm/shared';
 import { apiRequest } from '../lib/api';
 
@@ -126,4 +128,14 @@ export function fetchManagers() {
       role: string;
     }>
   >('/users/managers');
+}
+
+export function fetchProjectSubcontractors(projectId: string) {
+  return apiRequest<ProjectSubcontractorLinkDto[]>(
+    `/projects/${projectId}/subcontractors`,
+  );
+}
+
+export function fetchProjectActivity(projectId: string) {
+  return apiRequest<AuditActivityDto[]>(`/projects/${projectId}/activity`);
 }
