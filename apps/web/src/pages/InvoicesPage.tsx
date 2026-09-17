@@ -14,16 +14,27 @@ import {
   InvoiceStatusBadge,
   InvoiceTypeBadge,
 } from '../components/finance/StatusBadges';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError, apiDownload } from '../lib/api';
-import { formatCurrency, formatDateDe } from '../lib/format';
+import { formatDateDe } from '../lib/format';
 import {
   createInvoice,
   deleteInvoice,
@@ -98,8 +109,12 @@ export function InvoicesPage({
   const projectFilter =
     embeddedProjectId ?? searchParams.get('projectId') ?? '';
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
-  const [type, setType] = useState<InvoiceType | ''>('');
-  const [status, setStatus] = useState<InvoiceStatus | ''>('');
+  const [type, setType] = useState<InvoiceType | ''>(
+    () => (searchParams.get('type') as InvoiceType | null) ?? '',
+  );
+  const [status, setStatus] = useState<InvoiceStatus | ''>(
+    () => (searchParams.get('status') as InvoiceStatus | null) ?? '',
+  );
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<InvoiceInput>({
@@ -214,7 +229,7 @@ export function InvoicesPage({
   const content = (
     <>
       {!compact ? (
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
+        <FilterBar className="mb-4">
           <Input
             label="Suche"
             name="search"
@@ -247,7 +262,7 @@ export function InvoicesPage({
               setPage(1);
             }}
           />
-        </div>
+        </FilterBar>
       ) : null}
 
       {showForm && canWrite ? (
@@ -376,9 +391,9 @@ export function InvoicesPage({
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -403,21 +418,23 @@ export function InvoicesPage({
       ) : null}
 
       {query.error ? (
-        <EmptyState
-          title="Rechnungen konnten nicht geladen werden"
+        <ErrorState
+          title="Could not load invoices"
           description={
             query.error instanceof ApiError
               ? query.error.message
-              : 'Unerwarteter Fehler'
+              : 'Unexpected error'
           }
+          actionLabel="Retry"
+          onAction={() => void query.refetch()}
         />
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
         <EmptyState
-          title="Keine Rechnungen"
-          description="Erstellen Sie Ausgangs- oder Eingangsrechnungen."
-          actionLabel={canWrite ? 'Neue Rechnung' : undefined}
+          title="No invoices"
+          description="Create customer or supplier invoices to track receivables and payables."
+          actionLabel={canWrite ? 'New invoice' : undefined}
           onAction={
             canWrite
               ? () => {
@@ -430,141 +447,142 @@ export function InvoicesPage({
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Nummer</th>
-                  <th className="px-3 py-2 font-medium">Typ</th>
-                  <th className="px-3 py-2 font-medium">Partei</th>
-                  {!projectFilter ? (
-                    <th className="px-3 py-2 font-medium">Projekt</th>
-                  ) : null}
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Brutto</th>
-                  <th className="px-3 py-2 font-medium">Bezahlt</th>
-                  <th className="px-3 py-2 font-medium">Fällig</th>
-                  <th className="px-3 py-2 font-medium">Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((invoice) => {
-                  const party =
-                    invoice.type === 'CUSTOMER'
-                      ? invoice.customer?.companyName
-                      : invoice.supplier?.companyName;
-                  return (
-                    <tr key={invoice.id} className="border-b border-slate-100">
-                      <td className="px-3 py-3 font-medium">
-                        {invoice.invoiceNumber}
+        <DataTable
+          footer={
+            <>
+              <span>
+                Seite {query.data.meta.page} von {query.data.meta.totalPages} (
+                {query.data.meta.total} gesamt)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Zurück
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= query.data.meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Weiter
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Nummer</th>
+                <th className={dataTableThClassName()}>Typ</th>
+                <th className={dataTableThClassName()}>Partei</th>
+                {!projectFilter ? (
+                  <th className={dataTableThClassName()}>Projekt</th>
+                ) : null}
+                <th className={dataTableThClassName()}>Status</th>
+                <th className={dataTableThClassName('right')}>Brutto</th>
+                <th className={dataTableThClassName('right')}>Bezahlt</th>
+                <th className={dataTableThClassName()}>Fällig</th>
+                <th className={dataTableThClassName()}>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.data.map((invoice) => {
+                const party =
+                  invoice.type === 'CUSTOMER'
+                    ? invoice.customer?.companyName
+                    : invoice.supplier?.companyName;
+                return (
+                  <tr key={invoice.id} className={dataTableRowClassName()}>
+                    <td className={`${dataTableTdClassName()} font-medium`}>
+                      {invoice.invoiceNumber}
+                    </td>
+                    <td className={dataTableTdClassName()}>
+                      <InvoiceTypeBadge type={invoice.type} />
+                    </td>
+                    <td className={dataTableTdClassName()}>{party ?? '—'}</td>
+                    {!projectFilter ? (
+                      <td className={dataTableTdClassName()}>
+                        {invoice.project ? (
+                          <Link
+                            className="text-brand hover:underline"
+                            to={`/projects/${invoice.project.id}?tab=invoices`}
+                          >
+                            {invoice.project.projectNumber}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
                       </td>
-                      <td className="px-3 py-3">
-                        <InvoiceTypeBadge type={invoice.type} />
-                      </td>
-                      <td className="px-3 py-3">{party ?? '—'}</td>
-                      {!projectFilter ? (
-                        <td className="px-3 py-3">
-                          {invoice.project ? (
-                            <Link
-                              className="text-[var(--color-brand)] hover:underline"
-                              to={`/projects/${invoice.project.id}?tab=invoices`}
-                            >
-                              {invoice.project.projectNumber}
-                            </Link>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                      ) : null}
-                      <td className="px-3 py-3">
-                        <InvoiceStatusBadge status={invoice.status} />
-                      </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(invoice.grossAmount)}
-                      </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(invoice.paidAmount)}
-                      </td>
-                      <td className="px-3 py-3">
-                        {formatDateDe(invoice.dueDate)}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
+                    ) : null}
+                    <td className={dataTableTdClassName()}>
+                      <InvoiceStatusBadge status={invoice.status} />
+                    </td>
+                    <td className={dataTableTdClassName('right')}>
+                      <CurrencyValue value={invoice.grossAmount} size="sm" />
+                    </td>
+                    <td className={dataTableTdClassName('right')}>
+                      <CurrencyValue value={invoice.paidAmount} size="sm" />
+                    </td>
+                    <td className={dataTableTdClassName()}>
+                      {formatDateDe(invoice.dueDate)}
+                    </td>
+                    <td className={dataTableTdClassName()}>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="text-brand hover:underline"
+                          onClick={() => {
+                            void downloadInvoicePdf(
+                              invoice.id,
+                              `${invoice.invoiceNumber}.pdf`,
+                            ).catch((error) => {
+                              window.alert(
+                                error instanceof Error
+                                  ? error.message
+                                  : 'PDF-Download fehlgeschlagen',
+                              );
+                            });
+                          }}
+                        >
+                          PDF
+                        </button>
+                        <Link
+                          className="text-brand hover:underline"
+                          to={`/payments?invoiceId=${invoice.id}`}
+                        >
+                          Zahlungen
+                        </Link>
+                        {canWrite ? (
                           <button
                             type="button"
-                            className="text-[var(--color-brand)] hover:underline"
+                            className="text-danger hover:underline"
                             onClick={() => {
-                              void downloadInvoicePdf(
-                                invoice.id,
-                                `${invoice.invoiceNumber}.pdf`,
-                              ).catch((error) => {
-                                window.alert(
-                                  error instanceof Error
-                                    ? error.message
-                                    : 'PDF-Download fehlgeschlagen',
-                                );
-                              });
+                              if (
+                                window.confirm(
+                                  `Rechnung „${invoice.invoiceNumber}“ löschen?`,
+                                )
+                              ) {
+                                deleteMutation.mutate(invoice.id);
+                              }
                             }}
                           >
-                            PDF
+                            Löschen
                           </button>
-                          <Link
-                            className="text-[var(--color-brand)] hover:underline"
-                            to={`/payments?invoiceId=${invoice.id}`}
-                          >
-                            Zahlungen
-                          </Link>
-                          {canWrite ? (
-                            <button
-                              type="button"
-                              className="text-[var(--color-danger)] hover:underline"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `Rechnung „${invoice.invoiceNumber}“ löschen?`,
-                                  )
-                                ) {
-                                  deleteMutation.mutate(invoice.id);
-                                }
-                              }}
-                            >
-                              Löschen
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-            <span>
-              Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-              {query.data.meta.total} gesamt)
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Zurück
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= query.data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Weiter
-              </Button>
-            </div>
-          </div>
-        </Card>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </>
   );
@@ -573,7 +591,7 @@ export function InvoicesPage({
     return (
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-[var(--color-muted)]">
+          <p className="text-sm text-muted">
             Rechnungen für dieses Projekt
           </p>
           <div className="flex gap-2">
@@ -591,7 +609,7 @@ export function InvoicesPage({
                   setFormError(null);
                 }}
               >
-                Neue Rechnung
+                New invoice
               </Button>
             ) : null}
           </div>
@@ -604,8 +622,8 @@ export function InvoicesPage({
   return (
     <div>
       <PageHeader
-        title="Rechnungen"
-        description="Ausgangs- und Eingangsrechnungen mit MwSt."
+        title="Invoices"
+        description="Customer and supplier invoices, balances, and PDFs."
         actions={
           canWrite ? (
             <Button
@@ -615,7 +633,7 @@ export function InvoicesPage({
                 setFormError(null);
               }}
             >
-              Neue Rechnung
+              New invoice
             </Button>
           ) : null
         }

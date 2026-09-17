@@ -1,4 +1,5 @@
 import { Controller, Get, Query, StreamableFile } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { REPORT_EXPORT_TYPES, type ReportExportType } from '@fbm/shared';
 import { RequirePermissions } from '../../common/decorators/auth.decorators';
 import { ReportsService } from './reports.service';
@@ -8,12 +9,14 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @RequirePermissions('reports:read')
   getSummary(@Query('from') from?: string, @Query('to') to?: string) {
     return this.reportsService.getSummary({ from, to });
   }
 
   @Get('export')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @RequirePermissions('reports:export')
   async export(
     @Query('type') type?: string,

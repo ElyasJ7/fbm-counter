@@ -46,8 +46,7 @@ export class AuthService {
 
   private cookieOptions(maxAgeMs: number) {
     const secure = this.resolveCookieSecure();
-    const sameSite = (this.config.get<string>('COOKIE_SAME_SITE') ?? 'lax') as
-      'lax' | 'strict' | 'none';
+    const sameSite = this.resolveSameSite();
     return {
       httpOnly: true,
       secure,
@@ -55,6 +54,14 @@ export class AuthService {
       path: '/',
       maxAge: maxAgeMs,
     };
+  }
+
+  private resolveSameSite(): 'lax' | 'strict' | 'none' {
+    const raw = (
+      this.config.get<string>('COOKIE_SAME_SITE') ?? 'lax'
+    ).toLowerCase();
+    if (raw === 'lax' || raw === 'strict' || raw === 'none') return raw;
+    return 'lax';
   }
 
   private resolveCookieSecure(): boolean {
@@ -98,8 +105,7 @@ export class AuthService {
 
   clearAuthCookies(res: Response) {
     const secure = this.resolveCookieSecure();
-    const sameSite = (this.config.get<string>('COOKIE_SAME_SITE') ?? 'lax') as
-      'lax' | 'strict' | 'none';
+    const sameSite = this.resolveSameSite();
     const base = { httpOnly: true, secure, sameSite, path: '/' };
     res.clearCookie(ACCESS_COOKIE, base);
     res.clearCookie(REFRESH_COOKIE, base);

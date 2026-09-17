@@ -9,6 +9,7 @@ import {
 import { aggregateCosts } from '@fbm/financial-core';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { FinanceQueryService } from '../finance/finance-query.service';
 import { ProjectFinanceService } from '../finance/project-finance.service';
 import { BudgetsService } from './budgets.service';
 
@@ -29,6 +30,7 @@ describe('Budget sync vs project overview actuals', () => {
       providers: [
         BudgetsService,
         ProjectFinanceService,
+        FinanceQueryService,
         PrismaService,
         {
           provide: NotificationsService,

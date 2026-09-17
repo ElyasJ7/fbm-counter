@@ -7,6 +7,13 @@ export type NotificationPayload = {
   message: string;
   type: string;
   link?: string | null;
+  /**
+   * Idempotency key. Unique per user while the row exists.
+   * Example: `invoice.overdue:<invoiceId>`
+   * Clear/read notifications and omit/change key to allow a later re-fire
+   * after the invoice becomes current and overdue again.
+   */
+  dedupeKey?: string | null;
 };
 
 type DbClient = Prisma.TransactionClient | PrismaService;
@@ -45,18 +52,66 @@ export class NotificationsService {
     tx?: Prisma.TransactionClient,
   ) {
     const uniqueIds = [...new Set(userIds.filter(Boolean))];
-    if (uniqueIds.length === 0) return [];
+    if (uniqueIds.length === 0) return { created: 0 };
 
     const db = this.client(tx);
-    await db.notification.createMany({
-      data: uniqueIds.map((userId) => ({
-        userId,
-        title: payload.title,
-        message: payload.message,
-        type: payload.type,
-        link: payload.link ?? null,
-      })),
-    });
+    const dedupeKey = payload.dedupeKey?.trim() || null;
+
+    if (!dedupeKey) {
+      await db.notification.createMany({
+        data: uniqueIds.map((userId) => ({
+          userId,
+          title: payload.title,
+          message: payload.message,
+          type: payload.type,
+          link: payload.link ?? null,
+        })),
+      });
+      return { created: uniqueIds.length };
+    }
+
+    let created = 0;
+    for (const userId of uniqueIds) {
+      const existing = await db.notification.findFirst({
+        where: { userId, dedupeKey },
+        select: { id: true, readAt: true },
+      });
+      // Skip while an unread (or any) notification with this key exists.
+      // After the invoice is cured we mark these read and delete the key
+      // via clearDedupeKey so a later overdue cycle can notify again.
+      if (existing && !existing.readAt) {
+        continue;
+      }
+      if (existing && existing.readAt) {
+        // Re-open cycle: remove old key row so unique constraint allows insert
+        await db.notification.update({
+          where: { id: existing.id },
+          data: { dedupeKey: null },
+        });
+      }
+      try {
+        await db.notification.create({
+          data: {
+            userId,
+            title: payload.title,
+            message: payload.message,
+            type: payload.type,
+            link: payload.link ?? null,
+            dedupeKey,
+          },
+        });
+        created += 1;
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    return { created };
   }
 
   async createForRoles(
@@ -76,7 +131,7 @@ export class NotificationsService {
       },
       select: { id: true },
     });
-    await this.createForUsers(
+    return this.createForUsers(
       users.map((user) => user.id),
       payload,
       options?.tx,
@@ -88,7 +143,7 @@ export class NotificationsService {
     payload: NotificationPayload,
     options?: { excludeUserId?: string; tx?: Prisma.TransactionClient },
   ) {
-    if (!projectId) return;
+    if (!projectId) return { created: 0 };
     const db = this.client(options?.tx);
     const project = await db.project.findFirst({
       where: { id: projectId, deletedAt: null },
@@ -98,9 +153,26 @@ export class NotificationsService {
       !project?.projectManagerId ||
       project.projectManagerId === options?.excludeUserId
     ) {
-      return;
+      return { created: 0 };
     }
-    await this.createForUsers([project.projectManagerId], payload, options?.tx);
+    return this.createForUsers(
+      [project.projectManagerId],
+      payload,
+      options?.tx,
+    );
+  }
+
+  /** Mark overdue notifications read and clear dedupe keys for an invoice. */
+  async clearInvoiceOverdueDedupe(
+    invoiceId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = this.client(tx);
+    const key = `invoice.overdue:${invoiceId}`;
+    await db.notification.updateMany({
+      where: { dedupeKey: key, readAt: null },
+      data: { readAt: new Date(), dedupeKey: null },
+    });
   }
 
   async findAllForUser(

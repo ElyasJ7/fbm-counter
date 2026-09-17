@@ -1,14 +1,6 @@
-import Decimal from 'decimal.js';
-
-Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP });
-
-export { Decimal };
-
-/** Parse a monetary string/number into Decimal. Never use raw JS floats for money. */
-export function money(value: string | number | Decimal): Decimal {
-  if (value instanceof Decimal) return value;
-  return new Decimal(value);
-}
+export { Decimal, money, asMoneyString } from './money';
+import { money, asMoneyString, type Decimal } from './money';
+import { computeHeaderVat } from './vat';
 
 export function formatMoneyDe(
   value: string | number | Decimal,
@@ -24,24 +16,15 @@ export function formatMoneyDe(
 export function calculateTaxAmount(
   netAmount: string | number | Decimal,
   taxRatePercent: string | number | Decimal,
-): Decimal {
-  return money(netAmount)
-    .mul(money(taxRatePercent))
-    .div(100)
-    .toDecimalPlaces(2);
+) {
+  return money(computeHeaderVat(netAmount, taxRatePercent).taxAmount);
 }
 
 export function calculateGrossAmount(
   netAmount: string | number | Decimal,
   taxRatePercent: string | number | Decimal,
-): Decimal {
-  return money(netAmount)
-    .plus(calculateTaxAmount(netAmount, taxRatePercent))
-    .toDecimalPlaces(2);
-}
-
-function asMoneyString(value: Decimal): string {
-  return value.toDecimalPlaces(4).toFixed(4);
+) {
+  return money(computeHeaderVat(netAmount, taxRatePercent).grossAmount);
 }
 
 export type ProjectOverviewInput = {
@@ -309,6 +292,66 @@ export function resolveExpenseStatus(input: {
   return input.currentStatus;
 }
 
+/**
+ * Apply a payment to an expense (controlled mutation).
+ * Expense.paidAmount is not client-writable on create/update — use this path.
+ */
+export function applyPaymentToExpense(input: {
+  grossAmount: string | number | Decimal;
+  paidAmount: string | number | Decimal;
+  paymentAmount: string | number | Decimal;
+  currentStatus: ExpenseStatusName;
+  dueDate?: Date | string | null;
+  asOf?: Date;
+}): {
+  newPaidAmount: string;
+  remainingAmount: string;
+  status: ExpenseStatusName;
+} {
+  const payment = money(input.paymentAmount);
+  if (payment.lessThanOrEqualTo(0)) {
+    throw new Error('Payment amount must be greater than zero');
+  }
+  if (input.currentStatus === 'CANCELLED' || input.currentStatus === 'DRAFT') {
+    throw new Error('Cannot apply payment to cancelled or draft expenses');
+  }
+
+  const remaining = remainingBalance(input.grossAmount, input.paidAmount);
+  if (payment.greaterThan(remaining)) {
+    throw new Error('Payment exceeds outstanding expense balance');
+  }
+
+  const newPaid = money(input.paidAmount).plus(payment).toDecimalPlaces(4);
+  const status = resolveExpenseStatus({
+    currentStatus:
+      input.currentStatus === 'PENDING' ? 'APPROVED' : input.currentStatus,
+    grossAmount: input.grossAmount,
+    paidAmount: newPaid,
+    dueDate: input.dueDate,
+    asOf: input.asOf,
+  });
+
+  return {
+    newPaidAmount: asMoneyString(newPaid),
+    remainingAmount: asMoneyString(remainingBalance(input.grossAmount, newPaid)),
+    status,
+  };
+}
+
+export function assertValidExpensePaidAmount(
+  paidAmount: string | number | Decimal,
+  grossAmount: string | number | Decimal,
+): void {
+  const paid = money(paidAmount);
+  const gross = money(grossAmount);
+  if (paid.isNegative()) {
+    throw new Error('paidAmount cannot be negative');
+  }
+  if (paid.greaterThan(gross)) {
+    throw new Error('paidAmount cannot exceed grossAmount');
+  }
+}
+
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -322,3 +365,34 @@ export {
   type AggregatedCosts,
   type CostMoneyRow,
 } from './cost-policy';
+
+export {
+  computeHeaderVat,
+  reconcileInvoiceTotals,
+  sumLineNets,
+  assertNetPlusVatEqualsGross,
+  type InvoiceLineNet,
+  type InvoiceVatResult,
+} from './vat';
+
+export {
+  parseMoneyDe,
+  parseMoneyDeToFixed,
+  MoneyParseError,
+} from './money-parse';
+
+export {
+  isDateOnlyString,
+  toDateOnlyString,
+  dateOnlyToUtcDate,
+  dateOnlyToUtcStartOfDay,
+  dateOnlyToUtcEndOfDay,
+  formatDateOnlyDe,
+  DateOnlyError,
+} from './date-only';
+
+export {
+  neutralizeCsvFormula,
+  csvEscapeCell,
+  toCsvDocument,
+} from './csv';

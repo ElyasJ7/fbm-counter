@@ -7,16 +7,25 @@ import {
   SUBCONTRACTOR_TRADE_LABELS,
   type SubcontractorTrade,
 } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency } from '../lib/format';
 import {
   createSubcontractor,
   deleteSubcontractor,
@@ -109,15 +118,15 @@ export function SubcontractorsPage() {
   });
 
   const title = useMemo(
-    () => (editingId ? 'Nachunternehmer bearbeiten' : 'Neuer Nachunternehmer'),
+    () => (editingId ? 'Edit subcontractor' : 'New subcontractor'),
     [editingId],
   );
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Nachunternehmer"
-        description="Gewerke-Partner mit Projektzuordnung und Verträgen."
+        title="Subcontractors"
+        description="Trade partners assigned to projects."
         actions={
           canWrite ? (
             <Button
@@ -128,38 +137,38 @@ export function SubcontractorsPage() {
                 setFormError(null);
               }}
             >
-              Neuer Nachunternehmer
+              New subcontractor
             </Button>
           ) : null
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      <FilterBar>
         <Input
-          label="Suche"
+          label="Search"
           name="search"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             setPage(1);
           }}
-          placeholder="Firma, Kontakt, Stadt…"
+          placeholder="Company, contact, city…"
         />
         <Select
-          label="Gewerk"
+          label="Trade"
           name="tradeFilter"
           value={trade}
-          placeholder="Alle Gewerke"
+          placeholder="All trades"
           options={tradeOptions}
           onChange={(e) => {
             setTrade((e.target.value as SubcontractorTrade | '') || '');
             setPage(1);
           }}
         />
-      </div>
+      </FilterBar>
 
       {showForm && canWrite ? (
-        <Card className="mb-6" title={title}>
+        <Card title={title}>
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -273,9 +282,9 @@ export function SubcontractorsPage() {
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -303,21 +312,18 @@ export function SubcontractorsPage() {
       ) : null}
 
       {query.error ? (
-        <EmptyState
-          title="Nachunternehmer konnten nicht geladen werden"
-          description={
-            query.error instanceof ApiError
-              ? query.error.message
-              : 'Unerwarteter Fehler'
-          }
-        />
+        <Alert tone="danger" title="Could not load subcontractors">
+          {query.error instanceof ApiError
+            ? query.error.message
+            : 'Unexpected error'}
+        </Alert>
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
         <EmptyState
-          title="Noch keine Nachunternehmer"
-          description="Legen Sie Nachunternehmer an und ordnen Sie sie Projekten zu."
-          actionLabel={canWrite ? 'Neuer Nachunternehmer' : undefined}
+          title="No subcontractors yet"
+          description="Add subcontractors and assign them to projects."
+          actionLabel={canWrite ? 'New subcontractor' : undefined}
           onAction={
             canWrite
               ? () => {
@@ -331,123 +337,126 @@ export function SubcontractorsPage() {
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Firma</th>
-                  <th className="px-3 py-2 font-medium">Gewerk</th>
-                  <th className="px-3 py-2 font-medium">Kontakt</th>
-                  <th className="px-3 py-2 font-medium">Stadt</th>
-                  <th className="px-3 py-2 font-medium">Vertragswert</th>
-                  <th className="px-3 py-2 font-medium">Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium">
+        <DataTable
+          footer={
+            <>
+              <span>
+                Page {query.data.meta.page} of {query.data.meta.totalPages} (
+                {query.data.meta.total} total)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= query.data.meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Company</th>
+                <th className={dataTableThClassName()}>Trade</th>
+                <th className={dataTableThClassName()}>Contact</th>
+                <th className={dataTableThClassName()}>City</th>
+                <th className={dataTableThClassName('right')}>Contract value</th>
+                <th className={dataTableThClassName()}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.data.map((row) => (
+                <tr key={row.id} className={dataTableRowClassName()}>
+                  <td className={`${dataTableTdClassName()} font-medium`}>
+                    <Link
+                      className="text-brand hover:underline"
+                      to={`/subcontractors/${row.id}`}
+                    >
+                      {row.companyName}
+                    </Link>
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {SUBCONTRACTOR_TRADE_LABELS[row.trade]}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {row.contactPerson ?? '—'}
+                  </td>
+                  <td className={dataTableTdClassName()}>{row.city ?? '—'}</td>
+                  <td className={dataTableTdClassName('right')}>
+                    <CurrencyValue value={row.contractValue} size="sm" />
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <div className="flex flex-wrap gap-2">
                       <Link
-                        className="text-[var(--color-brand)] hover:underline"
+                        className="text-brand hover:underline"
                         to={`/subcontractors/${row.id}`}
                       >
-                        {row.companyName}
+                        Details
                       </Link>
-                    </td>
-                    <td className="px-3 py-3">
-                      {SUBCONTRACTOR_TRADE_LABELS[row.trade]}
-                    </td>
-                    <td className="px-3 py-3">{row.contactPerson ?? '—'}</td>
-                    <td className="px-3 py-3">{row.city ?? '—'}</td>
-                    <td className="px-3 py-3">
-                      {formatCurrency(row.contractValue)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          className="text-[var(--color-brand)] hover:underline"
-                          to={`/subcontractors/${row.id}`}
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className="text-ink hover:underline"
+                          onClick={() => {
+                            setEditingId(row.id);
+                            setForm({
+                              companyName: row.companyName,
+                              contactPerson: row.contactPerson ?? '',
+                              trade: row.trade,
+                              email: row.email ?? '',
+                              phone: row.phone ?? '',
+                              street: row.street ?? '',
+                              postalCode: row.postalCode ?? '',
+                              city: row.city ?? '',
+                              country: row.country,
+                              vatId: row.vatId ?? '',
+                              taxNumber: row.taxNumber ?? '',
+                              contractValue: row.contractValue,
+                              notes: row.notes ?? '',
+                            });
+                            setShowForm(true);
+                            setFormError(null);
+                          }}
                         >
-                          Details
-                        </Link>
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            className="text-slate-700 hover:underline"
-                            onClick={() => {
-                              setEditingId(row.id);
-                              setForm({
-                                companyName: row.companyName,
-                                contactPerson: row.contactPerson ?? '',
-                                trade: row.trade,
-                                email: row.email ?? '',
-                                phone: row.phone ?? '',
-                                street: row.street ?? '',
-                                postalCode: row.postalCode ?? '',
-                                city: row.city ?? '',
-                                country: row.country,
-                                vatId: row.vatId ?? '',
-                                taxNumber: row.taxNumber ?? '',
-                                contractValue: row.contractValue,
-                                notes: row.notes ?? '',
-                              });
-                              setShowForm(true);
-                              setFormError(null);
-                            }}
-                          >
-                            Bearbeiten
-                          </button>
-                        ) : null}
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            className="text-[var(--color-danger)] hover:underline"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Nachunternehmer „${row.companyName}“ löschen?`,
-                                )
-                              ) {
-                                deleteMutation.mutate(row.id);
-                              }
-                            }}
-                          >
-                            Löschen
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-            <span>
-              Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-              {query.data.meta.total} gesamt)
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Zurück
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= query.data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Weiter
-              </Button>
-            </div>
-          </div>
-        </Card>
+                          Edit
+                        </button>
+                      ) : null}
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className="text-danger hover:underline"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete subcontractor “${row.companyName}”?`,
+                              )
+                            ) {
+                              deleteMutation.mutate(row.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </div>
   );

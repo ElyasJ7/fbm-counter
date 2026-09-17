@@ -8,16 +8,25 @@ import {
   type SubcontractorTrade,
 } from '@fbm/shared';
 import { InvoiceStatusBadge } from '../components/finance/StatusBadges';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
+import { StatCard } from '../components/ui/StatCard';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency, formatDateDe } from '../lib/format';
+import { formatDateDe } from '../lib/format';
 import {
   assignSubcontractorProject,
   fetchSubcontractor,
@@ -26,19 +35,6 @@ import {
   type SubcontractorInput,
 } from '../services/partners';
 import { fetchProjects } from '../services/projects';
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-[var(--color-border)] bg-slate-50 p-4">
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
-        {label}
-      </p>
-      <p className="mt-2 text-lg font-semibold text-[var(--color-ink)]">
-        {value}
-      </p>
-    </div>
-  );
-}
 
 const tradeOptions = SUBCONTRACTOR_TRADES.map((trade) => ({
   value: trade,
@@ -155,7 +151,7 @@ export function SubcontractorDetailPage() {
     },
     onError: (error) => {
       setAssignError(
-        error instanceof ApiError ? error.message : 'Zuordnung fehlgeschlagen',
+        error instanceof ApiError ? error.message : 'Assignment failed',
       );
     },
   });
@@ -179,13 +175,13 @@ export function SubcontractorDetailPage() {
   if (query.error || !query.data) {
     return (
       <EmptyState
-        title="Nachunternehmer konnte nicht geladen werden"
+        title="Could not load subcontractor"
         description={
           query.error instanceof ApiError
             ? query.error.message
-            : 'Unerwarteter Fehler'
+            : 'Unexpected error'
         }
-        actionLabel="Zurück zu Nachunternehmern"
+        actionLabel="Back to subcontractors"
         onAction={() => navigate('/subcontractors')}
       />
     );
@@ -201,14 +197,14 @@ export function SubcontractorDetailPage() {
     .join(', ');
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={row.companyName}
-        description={`${SUBCONTRACTOR_TRADE_LABELS[row.trade]} · Nachunternehmer-Details`}
+        description={`${SUBCONTRACTOR_TRADE_LABELS[row.trade]} · Subcontractor details`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link to="/subcontractors">
-              <Button variant="secondary">Alle Nachunternehmer</Button>
+              <Button variant="secondary">All subcontractors</Button>
             </Link>
             {canWrite ? (
               <Button
@@ -218,36 +214,46 @@ export function SubcontractorDetailPage() {
                   setFormError(null);
                 }}
               >
-                {editing ? 'Bearbeitung schließen' : 'Bearbeiten'}
+                {editing ? 'Close editing' : 'Edit'}
               </Button>
             ) : null}
           </div>
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric
-          label="Rechnungen gesamt"
-          value={formatCurrency(row.totals.totalPurchases)}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Total invoices"
+          value={
+            <CurrencyValue value={row.totals.totalPurchases} size="md" />
+          }
         />
-        <Metric
-          label="Bezahlt"
-          value={formatCurrency(row.totals.paidAmount)}
+        <StatCard
+          label="Paid"
+          value={<CurrencyValue value={row.totals.paidAmount} size="md" />}
         />
-        <Metric
-          label="Offen"
-          value={formatCurrency(row.totals.outstandingBalance)}
+        <StatCard
+          label="Outstanding"
+          value={
+            <CurrencyValue
+              value={row.totals.outstandingBalance}
+              size="md"
+            />
+          }
         />
-        <Metric
-          label="Zugewiesener Vertragswert"
-          value={formatCurrency(
-            row.totals.assignedContractValue ?? row.contractValue,
-          )}
+        <StatCard
+          label="Assigned contract value"
+          value={
+            <CurrencyValue
+              value={row.totals.assignedContractValue ?? row.contractValue}
+              size="md"
+            />
+          }
         />
       </div>
 
       {editing && canWrite && form ? (
-        <Card className="mb-6" title="Nachunternehmer bearbeiten">
+        <Card title="Edit subcontractor">
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -354,9 +360,9 @@ export function SubcontractorDetailPage() {
               />
             </div>
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -374,51 +380,51 @@ export function SubcontractorDetailPage() {
         </Card>
       ) : null}
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card title="Kontaktdaten">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Contact">
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-[var(--color-muted)]">Gewerk</dt>
+              <dt className="text-muted">Trade</dt>
               <dd className="font-medium">
                 {SUBCONTRACTOR_TRADE_LABELS[row.trade]}
               </dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Ansprechpartner</dt>
+              <dt className="text-muted">Contact person</dt>
               <dd>{row.contactPerson ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">E-Mail</dt>
+              <dt className="text-muted">Email</dt>
               <dd>{row.email ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Telefon</dt>
+              <dt className="text-muted">Phone</dt>
               <dd>{row.phone ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Adresse</dt>
+              <dt className="text-muted">Address</dt>
               <dd>{address || '—'}</dd>
             </div>
           </dl>
         </Card>
-        <Card title="Vertrag">
+        <Card title="Contract">
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-[var(--color-muted)]">Rahmenvertragswert</dt>
+              <dt className="text-muted">Framework contract value</dt>
               <dd className="font-medium">
-                {formatCurrency(row.contractValue)}
+                <CurrencyValue value={row.contractValue} size="sm" />
               </dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">USt-IdNr.</dt>
+              <dt className="text-muted">VAT ID</dt>
               <dd>{row.vatId ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Steuernummer</dt>
+              <dt className="text-muted">Tax number</dt>
               <dd>{row.taxNumber ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Notizen</dt>
+              <dt className="text-muted">Notes</dt>
               <dd className="whitespace-pre-wrap">{row.notes ?? '—'}</dd>
             </div>
           </dl>
@@ -426,7 +432,7 @@ export function SubcontractorDetailPage() {
       </div>
 
       <div className="space-y-6">
-        <Card title="Zugewiesene Projekte">
+        <Card title="Assigned projects">
           {canWrite ? (
             <form
               className="mb-4 grid gap-3 md:grid-cols-3"
@@ -459,61 +465,63 @@ export function SubcontractorDetailPage() {
                 </Button>
               </div>
               {assignError ? (
-                <p className="md:col-span-3 text-sm text-[var(--color-danger)]">
+                <Alert tone="danger" className="md:col-span-3">
                   {assignError}
-                </p>
+                </Alert>
               ) : null}
             </form>
           ) : null}
 
           {row.projects.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">
-              Noch keine Projekte zugeordnet.
-            </p>
+            <p className="text-sm text-muted">No projects assigned yet.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Projekt</th>
-                    <th className="px-3 py-2 font-medium">Vertragswert</th>
-                    <th className="px-3 py-2 font-medium">Notizen</th>
+                    <th className={dataTableThClassName()}>Project</th>
+                    <th className={dataTableThClassName('right')}>
+                      Contract value
+                    </th>
+                    <th className={dataTableThClassName()}>Notes</th>
                     {canWrite ? (
-                      <th className="px-3 py-2 font-medium">Aktionen</th>
+                      <th className={dataTableThClassName()}>Actions</th>
                     ) : null}
                   </tr>
                 </thead>
                 <tbody>
                   {row.projects.map((link) => (
-                    <tr key={link.id} className="border-b border-slate-100">
-                      <td className="px-3 py-3 font-medium">
+                    <tr key={link.id} className={dataTableRowClassName()}>
+                      <td className={`${dataTableTdClassName()} font-medium`}>
                         <Link
-                          className="text-[var(--color-brand)] hover:underline"
+                          className="text-brand hover:underline"
                           to={`/projects/${link.project.id}`}
                         >
                           {link.project.projectNumber} · {link.project.name}
                         </Link>
                       </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(link.contractValue)}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue value={link.contractValue} size="sm" />
                       </td>
-                      <td className="px-3 py-3">{link.notes ?? '—'}</td>
+                      <td className={dataTableTdClassName()}>
+                        {link.notes ?? '—'}
+                      </td>
                       {canWrite ? (
-                        <td className="px-3 py-3">
+                        <td className={dataTableTdClassName()}>
                           <button
                             type="button"
-                            className="text-[var(--color-danger)] hover:underline"
+                            className="text-danger hover:underline"
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  `Zuordnung zu „${link.project.projectNumber}“ entfernen?`,
+                                  `Remove assignment to “${link.project.projectNumber}”?`,
                                 )
                               ) {
                                 unassignMutation.mutate(link.project.id);
                               }
                             }}
                           >
-                            Entfernen
+                            Remove
                           </button>
                         </td>
                       ) : null}
@@ -525,47 +533,47 @@ export function SubcontractorDetailPage() {
           )}
         </Card>
 
-        <Card title="Rechnungen">
+        <Card title="Invoices" padding="none">
           {row.invoices.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">
-              Keine Rechnungen zugeordnet.
+            <p className="px-5 py-4 text-sm text-muted">
+              No invoices assigned.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Nummer</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Datum</th>
-                    <th className="px-3 py-2 font-medium">Brutto</th>
-                    <th className="px-3 py-2 font-medium">Projekt</th>
+                    <th className={dataTableThClassName()}>Number</th>
+                    <th className={dataTableThClassName()}>Status</th>
+                    <th className={dataTableThClassName()}>Date</th>
+                    <th className={dataTableThClassName('right')}>Gross</th>
+                    <th className={dataTableThClassName()}>Project</th>
                   </tr>
                 </thead>
                 <tbody>
                   {row.invoices.map((invoice) => (
-                    <tr key={invoice.id} className="border-b border-slate-100">
-                      <td className="px-3 py-3 font-medium">
+                    <tr key={invoice.id} className={dataTableRowClassName()}>
+                      <td className={`${dataTableTdClassName()} font-medium`}>
                         <Link
-                          className="text-[var(--color-brand)] hover:underline"
+                          className="text-brand hover:underline"
                           to={`/invoices?search=${encodeURIComponent(invoice.invoiceNumber)}`}
                         >
                           {invoice.invoiceNumber}
                         </Link>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         <InvoiceStatusBadge status={invoice.status} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {formatDateDe(invoice.issueDate)}
                       </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(invoice.grossAmount)}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue value={invoice.grossAmount} size="sm" />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {invoice.project ? (
                           <Link
-                            className="text-[var(--color-brand)] hover:underline"
+                            className="text-brand hover:underline"
                             to={`/projects/${invoice.project.id}`}
                           >
                             {invoice.project.projectNumber}

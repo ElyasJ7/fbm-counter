@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn';
 type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   error?: string;
+  hint?: string;
   options: Array<{ value: string; label: string }>;
   placeholder?: string;
 };
@@ -10,6 +11,7 @@ type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
 export function Select({
   label,
   error,
+  hint,
   id,
   className,
   options,
@@ -17,21 +19,26 @@ export function Select({
   ...props
 }: SelectProps) {
   const selectId = id ?? props.name;
+  const hintId = hint && selectId ? `${selectId}-hint` : undefined;
+  const errorId = error && selectId ? `${selectId}-error` : undefined;
+
   return (
     <label className="flex w-full flex-col gap-1.5 text-sm" htmlFor={selectId}>
-      <span className="font-medium text-[var(--color-ink)]">{label}</span>
+      <span className="font-medium text-ink">{label}</span>
       <select
         id={selectId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={
+          [errorId, hintId].filter(Boolean).join(' ') || undefined
+        }
         className={cn(
-          'h-10 rounded-md border border-[var(--color-border)] bg-white px-3 text-[var(--color-ink)] shadow-sm',
-          error && 'border-[var(--color-danger)]',
+          'field-control',
+          error && 'field-control-error',
           className,
         )}
         {...props}
       >
-        {placeholder ? (
-          <option value="">{placeholder}</option>
-        ) : null}
+        {placeholder ? <option value="">{placeholder}</option> : null}
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -39,8 +46,12 @@ export function Select({
         ))}
       </select>
       {error ? (
-        <span className="text-xs text-[var(--color-danger)]" role="alert">
+        <span id={errorId} className="text-xs text-danger" role="alert">
           {error}
+        </span>
+      ) : hint ? (
+        <span id={hintId} className="text-helper">
+          {hint}
         </span>
       ) : null}
     </label>

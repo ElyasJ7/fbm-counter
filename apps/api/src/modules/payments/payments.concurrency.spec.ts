@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
 import { money } from '@fbm/financial-core';
 import { BudgetsService } from '../budgets/budgets.service';
+import { NumberingService } from '../common/numbering.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService } from './payments.service';
 
@@ -25,10 +27,17 @@ describe('PaymentsService concurrent overpayment guard', () => {
       providers: [
         PaymentsService,
         PrismaService,
+        NumberingService,
         {
           provide: BudgetsService,
           useValue: {
             syncAndNotifyOverruns: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            clearInvoiceOverdueDedupe: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

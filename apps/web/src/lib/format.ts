@@ -1,14 +1,12 @@
-import { formatMoneyDe } from '@fbm/financial-core';
+import { formatMoneyDe, formatDateOnlyDe, toDateOnlyString } from '@fbm/financial-core';
 
 export function formatCurrency(value: string | number, currency = 'EUR') {
   return formatMoneyDe(value, currency);
 }
 
+/** Business calendar dates — no timezone day-shift. */
 export function formatDateDe(value: string | null | undefined) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('de-DE').format(date);
+  return formatDateOnlyDe(value);
 }
 
 export function formatFileSize(bytes: number) {
@@ -20,5 +18,9 @@ export function formatFileSize(bytes: number) {
 
 export function toDateInputValue(value: string | null | undefined) {
   if (!value) return '';
-  return value.slice(0, 10);
+  try {
+    return toDateOnlyString(value);
+  } catch {
+    return value.slice(0, 10);
+  }
 }

@@ -1,15 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { roleHasPermission, type AuditLogDto } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
+import { SkeletonCard } from '../components/ui/Skeleton';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
+import { cn } from '../lib/cn';
 import { formatDateDe } from '../lib/format';
 import {
   fetchAuditEntityTypes,
@@ -26,20 +37,20 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
   if (value == null) {
     return (
       <div>
-        <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
+        <p className="text-xs font-medium tracking-wide text-muted uppercase">
           {label}
         </p>
-        <p className="mt-1 text-sm text-[var(--color-muted)]">—</p>
+        <p className="mt-1 text-sm text-muted">—</p>
       </div>
     );
   }
 
   return (
     <div>
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
+      <p className="text-xs font-medium tracking-wide text-muted uppercase">
         {label}
       </p>
-      <pre className="mt-1 max-h-64 overflow-auto rounded-md border border-[var(--color-border)] bg-slate-50 p-3 text-xs text-[var(--color-ink)]">
+      <pre className="mt-1 max-h-64 overflow-auto rounded-md border border-border bg-background p-3 text-xs text-ink">
         {JSON.stringify(value, null, 2)}
       </pre>
     </div>
@@ -100,7 +111,7 @@ export function AuditLogsPage() {
 
   const entityOptions = useMemo(
     () => [
-      { value: '', label: 'Alle Objekte' },
+      { value: '', label: 'All entity types' },
       ...(typesQuery.data?.data ?? []).map((type) => ({
         value: type,
         label: type,
@@ -111,68 +122,67 @@ export function AuditLogsPage() {
 
   if (!canRead) {
     return (
-      <div>
+      <div className="space-y-6">
         <PageHeader
-          title="Audit-Protokoll"
-          description="Unternehmensweite Änderungs- und Zugriffsprotokolle."
+          title="Audit"
+          description="Security and change history."
         />
         <EmptyState
-          title="Kein Zugriff"
-          description="Audit-Logs sind nur für Verwaltung und Admins sichtbar."
+          title="No access"
+          description="Audit logs are only visible to administrators."
         />
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Audit-Protokoll"
-        description="Alle erfassten Systemänderungen — filterbar nach Objekt, Zeitraum und Suche."
+        title="Audit"
+        description="Security and change history."
       />
 
-      <Card className="mb-4" title="Filter">
-        <form
-          className="grid gap-3 md:grid-cols-2 xl:grid-cols-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setAppliedSearch(search.trim());
-            setAppliedEntityType(entityType);
-            setAppliedFrom(from);
-            setAppliedTo(to);
-            setPage(1);
-          }}
-        >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setAppliedSearch(search.trim());
+          setAppliedEntityType(entityType);
+          setAppliedFrom(from);
+          setAppliedTo(to);
+          setPage(1);
+        }}
+      >
+        <FilterBar>
           <Input
-            label="Suche"
+            label="Search"
             name="search"
             value={search}
-            placeholder="Aktion, E-Mail, Objekt-ID…"
+            placeholder="Action, email, entity ID…"
             onChange={(e) => setSearch(e.target.value)}
           />
           <Select
-            label="Objekttyp"
+            label="Entity type"
             name="entityType"
             value={entityType}
             options={entityOptions}
             onChange={(e) => setEntityType(e.target.value)}
           />
           <Input
-            label="Von"
+            label="From"
             name="from"
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
           />
           <Input
-            label="Bis"
+            label="To"
             name="to"
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
           />
-          <div className="flex items-end gap-2">
-            <Button type="submit">Anwenden</Button>
+          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+            <Button type="submit">Apply</Button>
             <Button
               type="button"
               variant="secondary"
@@ -188,172 +198,172 @@ export function AuditLogsPage() {
                 setPage(1);
               }}
             >
-              Zurücksetzen
+              Reset
             </Button>
           </div>
-        </form>
-      </Card>
+        </FilterBar>
+      </form>
 
       {listQuery.isLoading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-8 w-8" />
+        <div className="grid gap-3">
+          <SkeletonCard className="h-40" />
+          <SkeletonCard className="h-40" />
         </div>
       ) : null}
 
       {listQuery.error ? (
-        <EmptyState
-          title="Audit-Logs konnten nicht geladen werden"
-          description={
-            listQuery.error instanceof ApiError
-              ? listQuery.error.message
-              : 'Unerwarteter Fehler'
-          }
-        />
+        <Alert tone="danger" title="Could not load audit logs">
+          {listQuery.error instanceof ApiError
+            ? listQuery.error.message
+            : 'Unexpected error'}
+        </Alert>
       ) : null}
 
       {listQuery.data && listQuery.data.data.length === 0 ? (
         <EmptyState
-          title="Keine Einträge"
-          description="Für den gewählten Filter gibt es keine Audit-Ereignisse."
+          title="No entries"
+          description="No audit events match the selected filters."
         />
       ) : null}
 
       {listQuery.data && listQuery.data.data.length > 0 ? (
         <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-          <Card>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Zeitpunkt</th>
-                    <th className="px-3 py-2 font-medium">Aktion</th>
-                    <th className="px-3 py-2 font-medium">Objekt</th>
-                    <th className="px-3 py-2 font-medium">Benutzer</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {listQuery.data.data.map((row) => (
-                    <tr
-                      key={row.id}
-                      className={`cursor-pointer border-b border-[var(--color-border)] last:border-0 hover:bg-slate-50 ${
-                        selectedId === row.id
-                          ? 'bg-[var(--color-brand-soft)]/50'
-                          : ''
-                      }`}
-                      onClick={() => setSelectedId(row.id)}
+          <DataTable
+            footer={
+              <>
+                <span>
+                  Page {listQuery.data.meta.page} of{' '}
+                  {listQuery.data.meta.totalPages} ({listQuery.data.meta.total}{' '}
+                  total)
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page >= listQuery.data.meta.totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </>
+            }
+          >
+            <table className="min-w-full text-left text-sm">
+              <thead className={dataTableHeadClassName()}>
+                <tr>
+                  <th className={dataTableThClassName()}>Time</th>
+                  <th className={dataTableThClassName()}>Action</th>
+                  <th className={dataTableThClassName()}>Entity</th>
+                  <th className={dataTableThClassName()}>User</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listQuery.data.data.map((row) => (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      dataTableRowClassName(),
+                      'cursor-pointer',
+                      selectedId === row.id && 'bg-brand-soft/50',
+                    )}
+                    onClick={() => setSelectedId(row.id)}
+                  >
+                    <td
+                      className={`${dataTableTdClassName()} whitespace-nowrap`}
                     >
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        {formatDateDe(row.createdAt)}
-                      </td>
-                      <td className="px-3 py-3 font-medium">{row.action}</td>
-                      <td className="px-3 py-3">
-                        <div>{row.entityType}</div>
-                        <div className="truncate text-xs text-[var(--color-muted)]">
-                          {row.entityId ?? '—'}
+                      {formatDateDe(row.createdAt)}
+                    </td>
+                    <td className={`${dataTableTdClassName()} font-medium`}>
+                      {row.action}
+                    </td>
+                    <td className={dataTableTdClassName()}>
+                      <div>{row.entityType}</div>
+                      <div className="truncate text-xs text-muted">
+                        {row.entityId ?? '—'}
+                      </div>
+                    </td>
+                    <td className={dataTableTdClassName()}>
+                      <div>{formatActor(row.actor)}</div>
+                      {row.actor?.email ? (
+                        <div className="truncate text-xs text-muted">
+                          {row.actor.email}
                         </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div>{formatActor(row.actor)}</div>
-                        {row.actor?.email ? (
-                          <div className="truncate text-xs text-[var(--color-muted)]">
-                            {row.actor.email}
-                          </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-              <span>
-                Seite {listQuery.data.meta.page} von{' '}
-                {listQuery.data.meta.totalPages} ({listQuery.data.meta.total}{' '}
-                gesamt)
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Zurück
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={page >= listQuery.data.meta.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Weiter
-                </Button>
-              </div>
-            </div>
-          </Card>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DataTable>
 
           <Card
             title="Details"
             description={
               selectedId
-                ? 'Vorher-/Nachher-Werte und Metadaten'
-                : 'Eintrag in der Liste auswählen'
+                ? 'Before/after values and metadata'
+                : 'Select an entry in the list'
             }
           >
             {!selectedId ? (
-              <p className="text-sm text-[var(--color-muted)]">
-                Klicken Sie auf eine Zeile, um Details zu sehen.
+              <p className="text-sm text-muted">
+                Click a row to view details.
               </p>
             ) : detailQuery.isLoading ? (
               <div className="flex justify-center py-8">
                 <Spinner />
               </div>
             ) : detailQuery.error ? (
-              <EmptyState
-                title="Details nicht verfügbar"
-                description={
-                  detailQuery.error instanceof ApiError
-                    ? detailQuery.error.message
-                    : 'Unerwarteter Fehler'
-                }
-              />
+              <Alert tone="danger" title="Details unavailable">
+                {detailQuery.error instanceof ApiError
+                  ? detailQuery.error.message
+                  : 'Unexpected error'}
+              </Alert>
             ) : detailQuery.data ? (
               <div className="space-y-4">
                 <div className="grid gap-2 text-sm">
                   <p>
-                    <span className="text-[var(--color-muted)]">Aktion: </span>
+                    <span className="text-muted">Action: </span>
                     {detailQuery.data.action}
                   </p>
                   <p>
-                    <span className="text-[var(--color-muted)]">Objekt: </span>
+                    <span className="text-muted">Entity: </span>
                     {detailQuery.data.entityType}
                     {detailQuery.data.entityId
                       ? ` · ${detailQuery.data.entityId}`
                       : ''}
                   </p>
                   <p>
-                    <span className="text-[var(--color-muted)]">Benutzer: </span>
+                    <span className="text-muted">User: </span>
                     {formatActor(detailQuery.data.actor)}
                     {detailQuery.data.actor?.email
                       ? ` (${detailQuery.data.actor.email})`
                       : ''}
                   </p>
                   <p>
-                    <span className="text-[var(--color-muted)]">Zeit: </span>
+                    <span className="text-muted">Time: </span>
                     {formatDateDe(detailQuery.data.createdAt)}
                   </p>
                   {detailQuery.data.ipAddress ? (
                     <p>
-                      <span className="text-[var(--color-muted)]">IP: </span>
+                      <span className="text-muted">IP: </span>
                       {detailQuery.data.ipAddress}
                     </p>
                   ) : null}
                 </div>
                 <JsonBlock
-                  label="Vorher"
+                  label="Before"
                   value={detailQuery.data.previousValue}
                 />
-                <JsonBlock label="Nachher" value={detailQuery.data.newValue} />
+                <JsonBlock label="After" value={detailQuery.data.newValue} />
               </div>
             ) : null}
           </Card>

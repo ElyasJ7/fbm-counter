@@ -7,9 +7,18 @@ import {
   roleHasPermission,
   type DocumentCategory,
 } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
@@ -158,72 +167,60 @@ export function DocumentsPage({
     [projectsQuery.data],
   );
 
-  return (
-    <div>
+  const content = (
+    <>
       {!compact ? (
-        <PageHeader
-          title="Dokumente"
-          description="Projektdokumente sicher hochladen, finden und herunterladen."
-          actions={
-            canWrite ? (
-              <Button
-                onClick={() => {
-                  setForm({ ...emptyForm, projectId: projectFilter });
-                  setShowForm(true);
-                  setFormError(null);
-                }}
-              >
-                Dokument hochladen
-              </Button>
-            ) : null
-          }
-        />
+        <FilterBar className="mb-4">
+          <Input
+            label="Search"
+            name="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Filename, title…"
+          />
+          <Select
+            label="Category"
+            name="category"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value as DocumentCategory | '');
+              setPage(1);
+            }}
+            options={categoryOptions}
+            placeholder="All categories"
+          />
+        </FilterBar>
       ) : (
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[var(--color-ink)]">
-            Dokumente
-          </h2>
-          {canWrite ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                setForm({ ...emptyForm, projectId: projectFilter });
-                setShowForm(true);
-                setFormError(null);
-              }}
-            >
-              Hochladen
-            </Button>
-          ) : null}
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <Input
+            label="Search"
+            name="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Filename, title…"
+          />
+          <Select
+            label="Category"
+            name="category"
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value as DocumentCategory | '');
+              setPage(1);
+            }}
+            options={categoryOptions}
+            placeholder="All categories"
+          />
         </div>
       )}
 
-      <div className="mb-4 grid gap-3 md:grid-cols-2">
-        <Input
-          label="Suche"
-          name="search"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Dateiname, Titel…"
-        />
-        <Select
-          label="Kategorie"
-          name="category"
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value as DocumentCategory | '');
-            setPage(1);
-          }}
-          options={categoryOptions}
-          placeholder="Alle Kategorien"
-        />
-      </div>
-
       {showForm ? (
-        <Card title="Dokument hochladen" className="mb-4">
+        <Card title="Upload document" className="mb-4">
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="Titel (optional)"
@@ -256,11 +253,11 @@ export function DocumentsPage({
               />
             ) : null}
             <label className="flex w-full flex-col gap-1.5 text-sm md:col-span-2">
-              <span className="font-medium text-[var(--color-ink)]">Datei</span>
+              <span className="font-medium text-ink">Datei</span>
               <input
                 type="file"
                 name="file"
-                className="block w-full text-sm text-[var(--color-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--color-surface-2)] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--color-ink)]"
+                className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-background file:px-3 file:py-2 file:text-sm file:font-medium file:text-ink"
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
@@ -281,16 +278,16 @@ export function DocumentsPage({
             </div>
           </div>
           {formError ? (
-            <p className="mt-3 text-sm text-[var(--color-danger)]" role="alert">
+            <Alert tone="danger" className="mt-3">
               {formError}
-            </p>
+            </Alert>
           ) : null}
           <div className="mt-4 flex gap-2">
             <Button
               onClick={() => uploadMutation.mutate()}
               disabled={uploadMutation.isPending || !form.file}
             >
-              {uploadMutation.isPending ? 'Wird hochgeladen…' : 'Hochladen'}
+              {uploadMutation.isPending ? 'Uploading…' : 'Upload'}
             </Button>
             <Button
               variant="secondary"
@@ -299,7 +296,7 @@ export function DocumentsPage({
                 setFormError(null);
               }}
             >
-              Abbrechen
+              Cancel
             </Button>
           </div>
         </Card>
@@ -310,136 +307,178 @@ export function DocumentsPage({
           <Spinner />
         </div>
       ) : query.isError ? (
-        <EmptyState
-          title="Dokumente konnten nicht geladen werden"
-          description={
-            query.error instanceof ApiError
-              ? query.error.message
-              : 'Bitte später erneut versuchen.'
-          }
-        />
+        <Alert tone="danger" title="Could not load documents">
+          {query.error instanceof ApiError
+            ? query.error.message
+            : 'Please try again later.'}
+        </Alert>
       ) : (query.data?.data.length ?? 0) === 0 ? (
         <EmptyState
-          title="Keine Dokumente"
-          description="Laden Sie Verträge, Pläne oder Belege hoch."
+          title="No documents"
+          description="Upload contracts, plans, or receipts."
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Dokument</th>
-                  <th className="px-3 py-2 font-medium">Kategorie</th>
-                  {!embeddedProjectId ? (
-                    <th className="px-3 py-2 font-medium">Projekt</th>
-                  ) : null}
-                  <th className="px-3 py-2 font-medium">Größe</th>
-                  <th className="px-3 py-2 font-medium">Hochgeladen</th>
-                  <th className="px-3 py-2 font-medium">Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data?.data.map((doc) => (
-                  <tr
-                    key={doc.id}
-                    className="border-b border-[var(--color-border)] last:border-0"
-                  >
-                    <td className="px-3 py-3">
-                      <div className="font-medium text-[var(--color-ink)]">
-                        {doc.title || doc.originalFileName}
+        <DataTable
+          footer={
+            (query.data?.meta.totalPages ?? 1) > 1 ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span>
+                  Page {query.data?.meta.page} of {query.data?.meta.totalPages}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= (query.data?.meta.totalPages ?? 1)}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Document</th>
+                <th className={dataTableThClassName()}>Category</th>
+                {!embeddedProjectId ? (
+                  <th className={dataTableThClassName()}>Project</th>
+                ) : null}
+                <th className={dataTableThClassName()}>Size</th>
+                <th className={dataTableThClassName()}>Uploaded</th>
+                <th className={dataTableThClassName()}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data?.data.map((doc) => (
+                <tr key={doc.id} className={dataTableRowClassName()}>
+                  <td className={dataTableTdClassName()}>
+                    <div className="font-medium text-ink">
+                      {doc.title || doc.originalFileName}
+                    </div>
+                    {doc.title ? (
+                      <div className="text-xs text-muted">
+                        {doc.originalFileName}
                       </div>
-                      {doc.title ? (
-                        <div className="text-xs text-[var(--color-muted)]">
-                          {doc.originalFileName}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-3">
-                      {DOCUMENT_CATEGORY_LABELS[doc.category]}
-                    </td>
-                    {!embeddedProjectId ? (
-                      <td className="px-3 py-3">
-                        {doc.project ? (
-                          <Link
-                            to={`/projects/${doc.project.id}?tab=documents`}
-                            className="text-[var(--color-accent)] hover:underline"
-                          >
-                            {doc.project.projectNumber}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
                     ) : null}
-                    <td className="px-3 py-3">{formatFileSize(doc.sizeBytes)}</td>
-                    <td className="px-3 py-3">
-                      <div>{formatDateDe(doc.createdAt)}</div>
-                      <div className="text-xs text-[var(--color-muted)]">
-                        {doc.uploadedBy.firstName} {doc.uploadedBy.lastName}
-                      </div>
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {DOCUMENT_CATEGORY_LABELS[doc.category]}
+                  </td>
+                  {!embeddedProjectId ? (
+                    <td className={dataTableTdClassName()}>
+                      {doc.project ? (
+                        <Link
+                          to={`/projects/${doc.project.id}?tab=documents`}
+                          className="text-brand hover:underline"
+                        >
+                          {doc.project.projectNumber}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
+                  ) : null}
+                  <td className={dataTableTdClassName()}>
+                    {formatFileSize(doc.sizeBytes)}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <div>{formatDateDe(doc.createdAt)}</div>
+                    <div className="text-xs text-muted">
+                      {doc.uploadedBy.firstName} {doc.uploadedBy.lastName}
+                    </div>
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          void triggerDownload(doc.id, doc.originalFileName)
+                        }
+                      >
+                        Download
+                      </Button>
+                      {canWrite ? (
                         <Button
                           size="sm"
-                          variant="secondary"
-                          onClick={() =>
-                            void triggerDownload(doc.id, doc.originalFileName)
-                          }
+                          variant="danger"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete document “${doc.title || doc.originalFileName}”?`,
+                              )
+                            ) {
+                              deleteMutation.mutate(doc.id);
+                            }
+                          }}
                         >
-                          Download
+                          Delete
                         </Button>
-                        {canWrite ? (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Dokument „${doc.title || doc.originalFileName}“ löschen?`,
-                                )
-                              ) {
-                                deleteMutation.mutate(doc.id);
-                              }
-                            }}
-                          >
-                            Löschen
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {(query.data?.meta.totalPages ?? 1) > 1 ? (
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Zurück
-              </Button>
-              <span className="text-sm text-[var(--color-muted)]">
-                Seite {query.data?.meta.page} von {query.data?.meta.totalPages}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= (query.data?.meta.totalPages ?? 1)}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Weiter
-              </Button>
-            </div>
-          ) : null}
-        </Card>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       )}
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-ink">Documents</h2>
+          {canWrite ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                setForm({ ...emptyForm, projectId: projectFilter });
+                setShowForm(true);
+                setFormError(null);
+              }}
+            >
+              Upload
+            </Button>
+          ) : null}
+        </div>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Documents"
+        description="Project and company documents."
+        actions={
+          canWrite ? (
+            <Button
+              onClick={() => {
+                setForm({ ...emptyForm, projectId: projectFilter });
+                setShowForm(true);
+                setFormError(null);
+              }}
+            >
+              Upload document
+            </Button>
+          ) : null
+        }
+      />
+      {content}
     </div>
   );
 }

@@ -12,12 +12,16 @@ import {
 } from '@prisma/client';
 import {
   applyPaymentToInvoice,
+  dateOnlyToUtcDate,
   money,
   resolveInvoiceStatus,
+  toDateOnlyString,
   type InvoiceStatusName,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NumberingService } from '../common/numbering.service';
 import type { CreatePaymentDto } from './dto/create-payment.dto';
 import { lockInvoiceForUpdate, sumValidPaymentAmount } from './payment-locking';
 
@@ -38,6 +42,8 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly budgets: BudgetsService,
+    private readonly notifications: NotificationsService,
+    private readonly numbering: NumberingService,
   ) {}
 
   private async syncBudgetAfterSupplierPayment(
@@ -57,16 +63,19 @@ export class PaymentsService {
   private async nextPaymentNumber(tx: Prisma.TransactionClient) {
     const year = new Date().getFullYear();
     const prefix = `PAY-${year}-`;
+    const sequenceKey = `payment:${prefix}`;
     const latest = await tx.payment.findFirst({
       where: { paymentNumber: { startsWith: prefix } },
       orderBy: { paymentNumber: 'desc' },
       select: { paymentNumber: true },
     });
-    let seq = 1;
+    let minNext = 1;
     if (latest) {
       const part = latest.paymentNumber.split('-').pop();
-      seq = (Number(part) || 0) + 1;
+      minNext = (Number.parseInt(part ?? '0', 10) || 0) + 1;
     }
+    await this.numbering.ensureAtLeast(sequenceKey, minNext, tx);
+    const seq = await this.numbering.allocateNext(sequenceKey, tx);
     return `${prefix}${String(seq).padStart(4, '0')}`;
   }
 
@@ -78,7 +87,7 @@ export class PaymentsService {
       paymentNumber: payment.paymentNumber,
       invoiceId: payment.invoiceId,
       projectId: payment.projectId,
-      paymentDate: payment.paymentDate.toISOString(),
+      paymentDate: toDateOnlyString(payment.paymentDate),
       amount: this.decimalToString(payment.amount),
       type: payment.type,
       method: payment.method,
@@ -195,7 +204,7 @@ export class PaymentsService {
           paymentNumber,
           invoiceId: invoice.id,
           projectId,
-          paymentDate: new Date(dto.paymentDate),
+          paymentDate: dateOnlyToUtcDate(dto.paymentDate),
           amount: dto.amount,
           type: paymentType,
           method: dto.method ?? PaymentMethod.BANK_TRANSFER,
@@ -236,10 +245,17 @@ export class PaymentsService {
         },
       });
 
-      return { payment: this.serialize(payment), invoice };
+      return {
+        payment: this.serialize(payment),
+        invoice,
+        invoiceStatus: applied.status,
+      };
     });
 
     await this.syncBudgetAfterSupplierPayment(result.invoice, actorId);
+    if (result.invoiceStatus !== InvoiceStatus.OVERDUE) {
+      await this.notifications.clearInvoiceOverdueDedupe(result.invoice.id);
+    }
     return result.payment;
   }
 

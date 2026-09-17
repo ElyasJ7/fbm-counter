@@ -6,14 +6,16 @@ import {
 } from '@nestjs/common';
 import { InvoiceStatus, InvoiceType, Prisma, Role } from '@prisma/client';
 import {
-  calculateGrossAmount,
-  calculateTaxAmount,
+  dateOnlyToUtcDate,
   money,
+  reconcileInvoiceTotals,
   resolveInvoiceStatus,
+  toDateOnlyString,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BudgetsService } from '../budgets/budgets.service';
+import { NumberingService } from '../common/numbering.service';
 import { buildPdfBuffer } from '../common/pdf.util';
 import type {
   CreateInvoiceDto,
@@ -46,6 +48,7 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly budgets: BudgetsService,
+    private readonly numbering: NumberingService,
   ) {}
 
   private async syncBudgetForInvoice(input: {
@@ -92,6 +95,7 @@ export class InvoicesService {
       link: invoice.projectId
         ? `/projects/${invoice.projectId}?tab=invoices`
         : '/invoices',
+      dedupeKey: `invoice.overdue:${invoice.id}`,
     };
 
     await this.notifications.notifyProjectManager(invoice.projectId, payload, {
@@ -117,24 +121,45 @@ export class InvoicesService {
     ).toUpperCase();
     const basePrefix = type === InvoiceType.CUSTOMER ? customerPrefix : 'ER';
     const prefix = `${basePrefix}-${year}-`;
+    const sequenceKey = `invoice:${prefix}`;
+
     const latest = await tx.invoice.findFirst({
       where: { invoiceNumber: { startsWith: prefix } },
       orderBy: { invoiceNumber: 'desc' },
       select: { invoiceNumber: true },
     });
-    let seq = 1;
+    let minNext = 1;
     if (latest) {
       const part = latest.invoiceNumber.split('-').pop();
-      seq = (Number(part) || 0) + 1;
+      minNext = (Number.parseInt(part ?? '0', 10) || 0) + 1;
     }
+    await this.numbering.ensureAtLeast(sequenceKey, minNext, tx);
+    const seq = await this.numbering.allocateNext(sequenceKey, tx);
     return `${prefix}${String(seq).padStart(4, '0')}`;
   }
 
-  private computeTax(netAmount: string, taxRate: string) {
-    return {
-      taxAmount: calculateTaxAmount(netAmount, taxRate).toFixed(4),
-      grossAmount: calculateGrossAmount(netAmount, taxRate).toFixed(4),
-    };
+  private computeTax(
+    netAmount: string,
+    taxRate: string,
+    lines?: Array<{ netAmount: string }>,
+  ) {
+    try {
+      const reconciled = reconcileInvoiceTotals({
+        netAmount,
+        taxRatePercent: taxRate,
+        lines,
+      });
+      return {
+        netAmount: reconciled.netAmount,
+        taxAmount: reconciled.taxAmount,
+        grossAmount: reconciled.grossAmount,
+        taxRate: reconciled.taxRate,
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invoice totals invalid',
+      );
+    }
   }
 
   private mapItems(items?: InvoiceItemDto[]) {
@@ -189,8 +214,8 @@ export class InvoicesService {
       customerId: invoice.customerId,
       supplierId: invoice.supplierId,
       subcontractorId: invoice.subcontractorId,
-      issueDate: invoice.issueDate.toISOString(),
-      dueDate: invoice.dueDate.toISOString(),
+      issueDate: toDateOnlyString(invoice.issueDate),
+      dueDate: toDateOnlyString(invoice.dueDate),
       netAmount: this.decimalToString(invoice.netAmount),
       taxRate: this.decimalToString(invoice.taxRate),
       taxAmount: this.decimalToString(invoice.taxAmount),
@@ -424,70 +449,92 @@ export class InvoicesService {
       });
       const taxRate =
         dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
-      const amounts = this.computeTax(dto.netAmount, taxRate);
-      const invoiceNumber =
+      const amounts = this.computeTax(
+        dto.netAmount,
+        taxRate,
+        items?.map((item) => ({ netAmount: item.netAmount })),
+      );
+      let invoiceNumber =
         dto.invoiceNumber ?? (await this.nextInvoiceNumber(dto.type, tx));
 
-      const row = await tx.invoice.create({
-        data: {
-          invoiceNumber,
-          type: dto.type,
-          projectId: dto.projectId,
-          customerId: dto.type === InvoiceType.CUSTOMER ? dto.customerId : null,
-          supplierId:
-            dto.type === InvoiceType.SUPPLIER ? (dto.supplierId ?? null) : null,
-          subcontractorId:
-            dto.type === InvoiceType.SUPPLIER
-              ? (dto.subcontractorId ?? null)
-              : null,
-          issueDate: new Date(dto.issueDate),
-          dueDate: new Date(dto.dueDate),
-          netAmount: dto.netAmount,
-          taxRate,
-          taxAmount: amounts.taxAmount,
-          grossAmount: amounts.grossAmount,
-          paidAmount: '0',
-          status: dto.status ?? InvoiceStatus.DRAFT,
-          paymentTerms: dto.paymentTerms,
-          notes: dto.notes,
-          ...(items ? { items: { create: items } } : {}),
-        },
-        include: invoiceInclude,
-      });
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const row = await tx.invoice.create({
+            data: {
+              invoiceNumber,
+              type: dto.type,
+              projectId: dto.projectId,
+              customerId:
+                dto.type === InvoiceType.CUSTOMER ? dto.customerId : null,
+              supplierId:
+                dto.type === InvoiceType.SUPPLIER
+                  ? (dto.supplierId ?? null)
+                  : null,
+              subcontractorId:
+                dto.type === InvoiceType.SUPPLIER
+                  ? (dto.subcontractorId ?? null)
+                  : null,
+              issueDate: dateOnlyToUtcDate(dto.issueDate),
+              dueDate: dateOnlyToUtcDate(dto.dueDate),
+              netAmount: amounts.netAmount,
+              taxRate: amounts.taxRate,
+              taxAmount: amounts.taxAmount,
+              grossAmount: amounts.grossAmount,
+              paidAmount: '0',
+              status: dto.status ?? InvoiceStatus.DRAFT,
+              paymentTerms: dto.paymentTerms,
+              notes: dto.notes,
+              ...(items ? { items: { create: items } } : {}),
+            },
+            include: invoiceInclude,
+          });
 
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          action: 'INVOICE_CREATED',
-          entityType: 'Invoice',
-          entityId: row.id,
-          newValue: {
-            invoiceNumber: row.invoiceNumber,
-            type: row.type,
-            status: row.status,
-            netAmount: row.netAmount.toString(),
-          },
-        },
-      });
+          await tx.auditLog.create({
+            data: {
+              actorId,
+              action: 'INVOICE_CREATED',
+              entityType: 'Invoice',
+              entityId: row.id,
+              newValue: {
+                invoiceNumber: row.invoiceNumber,
+                type: row.type,
+                status: row.status,
+                netAmount: row.netAmount.toString(),
+              },
+            },
+          });
 
-      const resolved = resolveInvoiceStatus({
-        currentStatus: row.status,
-        grossAmount: row.grossAmount.toString(),
-        paidAmount: row.paidAmount.toString(),
-        dueDate: row.dueDate,
-      });
-      const finalInvoice =
-        resolved !== row.status
-          ? await tx.invoice.update({
-              where: { id: row.id },
-              data: { status: resolved },
-              include: invoiceInclude,
-            })
-          : row;
+          const resolved = resolveInvoiceStatus({
+            currentStatus: row.status,
+            grossAmount: row.grossAmount.toString(),
+            paidAmount: row.paidAmount.toString(),
+            dueDate: row.dueDate,
+          });
+          const finalInvoice =
+            resolved !== row.status
+              ? await tx.invoice.update({
+                  where: { id: row.id },
+                  data: { status: resolved },
+                  include: invoiceInclude,
+                })
+              : row;
 
-      await this.notifyIfNewlyOverdue(finalInvoice, null, actorId, tx);
+          await this.notifyIfNewlyOverdue(finalInvoice, null, actorId, tx);
 
-      return this.serialize(finalInvoice);
+          return this.serialize(finalInvoice);
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002' &&
+            !dto.invoiceNumber
+          ) {
+            invoiceNumber = await this.nextInvoiceNumber(dto.type, tx);
+            continue;
+          }
+          throw error;
+        }
+      }
+      throw new ConflictException('Could not allocate a unique invoice number');
     });
 
     await this.syncBudgetForInvoice({
@@ -549,15 +596,29 @@ export class InvoicesService {
 
     const netAmount = dto.netAmount ?? existing.netAmount.toString();
     const taxRate = dto.taxRate ?? existing.taxRate.toString();
+    const items = this.mapItems(dto.items);
     const amounts =
-      dto.netAmount !== undefined || dto.taxRate !== undefined
-        ? this.computeTax(netAmount, taxRate)
+      dto.netAmount !== undefined ||
+      dto.taxRate !== undefined ||
+      items !== undefined
+        ? this.computeTax(
+            netAmount,
+            taxRate,
+            items?.map((item) => ({ netAmount: item.netAmount })),
+          )
         : {
+            netAmount: existing.netAmount.toString(),
             taxAmount: existing.taxAmount.toString(),
             grossAmount: existing.grossAmount.toString(),
+            taxRate: existing.taxRate.toString(),
           };
 
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : existing.dueDate;
+    const dueDate = dto.dueDate
+      ? dateOnlyToUtcDate(dto.dueDate)
+      : existing.dueDate;
+    const issueDate = dto.issueDate
+      ? dateOnlyToUtcDate(dto.issueDate)
+      : existing.issueDate;
     const requestedStatus = dto.status ?? existing.status;
     const status = resolveInvoiceStatus({
       currentStatus: requestedStatus,
@@ -565,8 +626,6 @@ export class InvoicesService {
       paidAmount,
       dueDate,
     });
-
-    const items = this.mapItems(dto.items);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (items) {
@@ -597,10 +656,10 @@ export class InvoicesService {
               : dto.type
                 ? null
                 : undefined,
-          issueDate: dto.issueDate ? new Date(dto.issueDate) : undefined,
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-          netAmount: dto.netAmount,
-          taxRate: dto.taxRate,
+          issueDate: dto.issueDate ? issueDate : undefined,
+          dueDate: dto.dueDate ? dueDate : undefined,
+          netAmount: amounts.netAmount,
+          taxRate: amounts.taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
           paidAmount,

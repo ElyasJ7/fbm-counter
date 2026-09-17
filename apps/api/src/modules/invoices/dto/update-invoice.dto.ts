@@ -3,13 +3,10 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
-  IsInt,
   IsNumberString,
   IsOptional,
   IsString,
   MaxLength,
-  Min,
-  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';

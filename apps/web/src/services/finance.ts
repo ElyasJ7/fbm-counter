@@ -41,7 +41,6 @@ export type ExpenseInput = {
   dueDate?: string;
   netAmount: string;
   taxRate?: string;
-  paidAmount?: string;
   status?: ExpenseStatus;
   paymentDate?: string;
   paymentMethod?: PaymentMethod;

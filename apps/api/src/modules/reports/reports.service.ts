@@ -1,7 +1,15 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { aggregateCosts, money } from '@fbm/financial-core';
+import {
+  aggregateCosts,
+  dateOnlyToUtcEndOfDay,
+  dateOnlyToUtcStartOfDay,
+  money,
+  toCsvDocument,
+  toDateOnlyString,
+} from '@fbm/financial-core';
 import type { BudgetCategory } from '@prisma/client';
 import { buildPdfBuffer } from '../common/pdf.util';
+import { FinanceQueryService } from '../finance/finance-query.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const OPEN_INVOICE_STATUSES = [
@@ -18,7 +26,10 @@ export type ReportQuery = {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly financeQuery: FinanceQueryService,
+  ) {}
 
   private moneyStr(value: ReturnType<typeof money>) {
     return value.toDecimalPlaces(4).toFixed(4);
@@ -31,10 +42,7 @@ export class ReportsService {
   }
 
   private formatDateLocal(date: Date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return toDateOnlyString(date);
   }
 
   private parseDateBoundary(
@@ -42,20 +50,13 @@ export class ReportsService {
     endOfDay: boolean,
   ): Date | undefined {
     if (!value?.trim()) return undefined;
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-    if (!match) {
+    try {
+      return endOfDay
+        ? dateOnlyToUtcEndOfDay(value)
+        : dateOnlyToUtcStartOfDay(value);
+    } catch {
       throw new BadRequestException(`Invalid date "${value}". Use YYYY-MM-DD.`);
     }
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    const date = endOfDay
-      ? new Date(year, month - 1, day, 23, 59, 59, 999)
-      : new Date(year, month - 1, day, 0, 0, 0, 0);
-    if (Number.isNaN(date.getTime())) {
-      throw new BadRequestException(`Invalid date "${value}".`);
-    }
-    return date;
   }
 
   private resolvePeriod(query: ReportQuery) {
@@ -94,24 +95,85 @@ export class ReportsService {
     return true;
   }
 
-  private csvEscape(value: string | number | null | undefined) {
-    const raw = value == null ? '' : String(value);
-    if (/[;"\n\r]/.test(raw)) {
-      return `"${raw.replace(/"/g, '""')}"`;
-    }
-    return raw;
-  }
-
-  private toCsv(rows: string[][]) {
-    const bom = '\uFEFF';
-    const body = rows
-      .map((row) => row.map((cell) => this.csvEscape(cell)).join(';'))
-      .join('\r\n');
-    return `${bom}${body}\r\n`;
+  private toCsv(rows: Array<Array<string | number | null | undefined>>) {
+    return toCsvDocument(rows);
   }
 
   async getSummary(query: ReportQuery = {}) {
     const { from, to } = this.resolvePeriod(query);
+
+    // Unscoped path: reuse scalable finance query service (same cost policy).
+    if (!from && !to) {
+      const [
+        totalRevenue,
+        costs,
+        outstandingCustomer,
+        outstandingSupplier,
+        projectKpis,
+        cash,
+        months,
+        projectProfitability,
+      ] = await Promise.all([
+        this.financeQuery.customerRevenuePaid(),
+        this.financeQuery.companyCostTotals(),
+        this.financeQuery.outstandingByType('CUSTOMER'),
+        this.financeQuery.outstandingByType('SUPPLIER'),
+        this.financeQuery.projectKpis(),
+        this.financeQuery.cashFlowTotals(),
+        Promise.resolve(this.lastNMonths(12)),
+        this.financeQuery.projectProfitabilityRows(),
+      ]);
+      const monthlyCashFlow = await this.financeQuery.monthlyCashFlow(months);
+      const totalBudget = money(projectKpis.totalBudget);
+      const totalExpensePaid = money(costs.actualCosts);
+      const budgetUtilizationPercent = totalBudget.isZero()
+        ? null
+        : totalExpensePaid
+            .div(totalBudget)
+            .mul(100)
+            .toDecimalPlaces(2)
+            .toFixed(2);
+
+      const expensesByCategory = Object.entries(costs.byCategory)
+        .map(([category, amounts]) => ({
+          category: category as BudgetCategory,
+          amount: amounts.actual,
+        }))
+        .filter((row) => !money(row.amount).isZero())
+        .sort((a, b) => money(b.amount).comparedTo(money(a.amount)));
+
+      const sorted = [...projectProfitability].sort((a, b) =>
+        money(b.profit).comparedTo(money(a.profit)),
+      );
+
+      return {
+        currency: 'EUR',
+        generatedAt: new Date().toISOString(),
+        period: { from: null, to: null },
+        kpis: {
+          totalRevenue,
+          totalExpenses: costs.actualCosts,
+          grossProfit: money(totalRevenue)
+            .minus(totalExpensePaid)
+            .toDecimalPlaces(4)
+            .toFixed(4),
+          netProfit: money(totalRevenue)
+            .minus(totalExpensePaid)
+            .toDecimalPlaces(4)
+            .toFixed(4),
+          availableCash: cash.availableCash,
+          outstandingCustomerInvoices: outstandingCustomer,
+          outstandingSupplierInvoices: outstandingSupplier,
+          activeProjects: projectKpis.activeProjects,
+          totalProjectValue: projectKpis.totalProjectValue,
+          totalBudget: projectKpis.totalBudget,
+          budgetUtilizationPercent,
+        },
+        monthlyCashFlow,
+        projectProfitability: sorted,
+        expensesByCategory,
+      };
+    }
 
     const [projects, customerInvoices, supplierInvoices, expenses, payments] =
       await Promise.all([
@@ -405,7 +467,7 @@ export class ReportsService {
           'Projektnummer',
           'Name',
           'Status',
-          'Erlös',
+          'Zahlungseingang',
           'Kosten',
           'Gewinn',
           'Marge_%',
@@ -434,7 +496,7 @@ export class ReportsService {
 
     const rows = [
       ['Kennzahl', 'Wert', 'Währung'],
-      ['Gesamterlös', summary.kpis.totalRevenue, currency],
+      ['Zahlungseingang (Cash received)', summary.kpis.totalRevenue, currency],
       ['Gesamtausgaben', summary.kpis.totalExpenses, currency],
       ['Bruttogewinn', summary.kpis.grossProfit, currency],
       ['Nettogewinn', summary.kpis.netProfit, currency],
@@ -467,7 +529,7 @@ export class ReportsService {
         'Projektnummer',
         'Name',
         'Status',
-        'Erlös',
+        'Zahlungseingang',
         'Kosten',
         'Gewinn',
         'Marge_%',
@@ -515,7 +577,7 @@ export class ReportsService {
         doc.fillColor('#000').fontSize(12).text('Kennzahlen');
         doc.fontSize(10);
         doc.text(
-          `Gesamterlös: ${summary.kpis.totalRevenue} ${summary.currency}`,
+          `Zahlungseingang: ${summary.kpis.totalRevenue} ${summary.currency}`,
         );
         doc.text(
           `Gesamtausgaben: ${summary.kpis.totalExpenses} ${summary.currency}`,

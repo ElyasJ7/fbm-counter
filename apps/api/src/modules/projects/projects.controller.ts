@@ -28,6 +28,7 @@ export class ProjectsController {
     @Query('search') search?: string,
     @Query('status') status?: ProjectStatus,
     @Query('customerId') customerId?: string,
+    @Query('projectManagerId') projectManagerId?: string,
   ) {
     return this.projectsService.findAll({
       page: page ? Number(page) : undefined,
@@ -35,6 +36,7 @@ export class ProjectsController {
       search,
       status,
       customerId,
+      projectManagerId,
     });
   }
 

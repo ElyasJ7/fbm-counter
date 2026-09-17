@@ -2,6 +2,8 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { MetricsService } from '../src/modules/common/metrics.service';
+import { StorageService } from '../src/modules/documents/storage.service';
 import { HealthController } from '../src/modules/health/health.controller';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
@@ -16,6 +18,18 @@ describe('Health (e2e)', () => {
           provide: PrismaService,
           useValue: {
             $queryRaw: jest.fn().mockResolvedValue([{ ok: 1 }]),
+          },
+        },
+        {
+          provide: MetricsService,
+          useValue: {
+            snapshot: () => ({ requestsTotal: 0 }),
+          },
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            fileExists: jest.fn().mockResolvedValue(false),
           },
         },
       ],

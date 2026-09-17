@@ -8,14 +8,16 @@ import { ExpenseStatus, Prisma, Role } from '@prisma/client';
 import {
   calculateGrossAmount,
   calculateTaxAmount,
+  applyPaymentToExpense,
+  assertValidExpensePaidAmount,
   resolveExpenseStatus,
-  type ExpenseStatusName,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { CreateExpenseDto } from './dto/create-expense.dto';
 import type { UpdateExpenseDto } from './dto/update-expense.dto';
+import type { RecordExpensePaymentDto } from './dto/record-expense-payment.dto';
 
 const expenseInclude = {
   project: { select: { id: true, projectNumber: true, name: true } },
@@ -226,7 +228,7 @@ export class ExpensesService {
           taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
-          paidAmount: dto.paidAmount ?? '0',
+          paidAmount: '0',
           status: dto.status ?? ExpenseStatus.DRAFT,
           paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
           paymentMethod: dto.paymentMethod,
@@ -293,7 +295,14 @@ export class ExpensesService {
             grossAmount: existing.grossAmount.toString(),
           };
 
-    const paidAmount = dto.paidAmount ?? existing.paidAmount.toString();
+    const paidAmount = existing.paidAmount.toString();
+    try {
+      assertValidExpensePaidAmount(paidAmount, amounts.grossAmount);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid paid amount',
+      );
+    }
     const dueDate =
       dto.dueDate === undefined
         ? existing.dueDate
@@ -334,7 +343,7 @@ export class ExpensesService {
           taxRate: dto.taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
-          paidAmount: dto.paidAmount,
+          // paidAmount is intentionally omitted — use recordPayment()
           status,
           paymentDate:
             dto.paymentDate === undefined
@@ -378,6 +387,84 @@ export class ExpensesService {
     for (const projectId of projectIds) {
       await this.budgets
         .syncAndNotifyOverruns(projectId, actorId)
+        .catch(() => undefined);
+    }
+    return updated;
+  }
+
+  /**
+   * Controlled payment recording for expenses.
+   * Limitation: expenses do not share the invoice Payment ledger; paidAmount is
+   * stored on the expense row and only mutated through this endpoint (Option B).
+   */
+  async recordPayment(
+    id: string,
+    dto: RecordExpensePaymentDto,
+    actorId: string,
+  ) {
+    const existing = await this.prisma.expense.findFirst({
+      where: { id, deletedAt: null },
+      include: expenseInclude,
+    });
+    if (!existing) {
+      throw new NotFoundException('Expense not found');
+    }
+
+    let applied;
+    try {
+      applied = applyPaymentToExpense({
+        grossAmount: existing.grossAmount.toString(),
+        paidAmount: existing.paidAmount.toString(),
+        paymentAmount: dto.amount,
+        currentStatus: existing.status,
+        dueDate: existing.dueDate,
+      });
+      assertValidExpensePaidAmount(
+        applied.newPaidAmount,
+        existing.grossAmount.toString(),
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid expense payment',
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.expense.update({
+        where: { id },
+        data: {
+          paidAmount: applied.newPaidAmount,
+          status: applied.status,
+          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
+          paymentMethod: dto.paymentMethod ?? existing.paymentMethod,
+        },
+        include: expenseInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'EXPENSE_PAYMENT_RECORDED',
+          entityType: 'Expense',
+          entityId: id,
+          previousValue: {
+            paidAmount: existing.paidAmount.toString(),
+            status: existing.status,
+          },
+          newValue: {
+            paidAmount: row.paidAmount.toString(),
+            status: row.status,
+            paymentAmount: dto.amount,
+          },
+        },
+      });
+
+      return this.serialize(row);
+    });
+
+    if (updated.projectId) {
+      await this.budgets
+        .syncAndNotifyOverruns(updated.projectId, actorId)
         .catch(() => undefined);
     }
     return updated;

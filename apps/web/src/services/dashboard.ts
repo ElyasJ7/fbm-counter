@@ -1,5 +1,19 @@
 import { apiRequest } from '../lib/api';
 
+export type DashboardProjectProfitability = {
+  projectId: string;
+  projectNumber: string;
+  name: string;
+  status: string;
+  revenue: string;
+  costs: string;
+  committedCosts: string;
+  profit: string;
+  profitMarginPercent: string | null;
+  contractValue: string;
+  currentBudget: string;
+};
+
 export type DashboardResponse = {
   currency: string;
   generatedAt: string;
@@ -36,15 +50,7 @@ export type DashboardResponse = {
       month: string;
       cumulativeProfit: string;
     }>;
-    projectProfitability: Array<{
-      projectId: string;
-      projectNumber: string;
-      name: string;
-      revenue: string;
-      costs: string;
-      profit: string;
-      contractValue: string;
-    }>;
+    projectProfitability: DashboardProjectProfitability[];
     expensesByCategory: Array<{
       category: string;
       amount: string;
@@ -55,6 +61,10 @@ export type DashboardResponse = {
       variance: string;
     };
     invoiceStatusDistribution: Array<{
+      status: string;
+      count: number;
+    }>;
+    projectStatusDistribution: Array<{
       status: string;
       count: number;
     }>;

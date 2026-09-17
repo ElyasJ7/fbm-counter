@@ -4,6 +4,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { APP_COMPANY_PLACEHOLDER, APP_NAME } from '@fbm/shared';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { Alert } from '../components/ui/Alert';
 import { Input } from '../components/ui/Input';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
@@ -56,14 +57,14 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(160deg,#0f4c5c_0%,#123048_45%,#f4f6f8_45%)] p-4">
-      <Card className="w-full max-w-md shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md" padding="lg">
         <div className="mb-6">
-          <p className="text-sm font-semibold tracking-wide text-[var(--color-brand)]">
+          <p className="text-sm font-semibold tracking-wide text-brand">
             {APP_NAME}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold">Sign in</h1>
-          <p className="mt-1 text-sm text-[var(--color-muted)]">
+          <h1 className="mt-1 text-page-title">Sign in</h1>
+          <p className="mt-1 text-sm text-muted">
             Finance & building management for {APP_COMPANY_PLACEHOLDER}
           </p>
         </div>
@@ -87,18 +88,13 @@ export function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          {error ? (
-            <p className="text-sm text-[var(--color-danger)]" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting ? <Spinner className="h-4 w-4 border-white/40 border-t-white" /> : null}
+          {error ? <Alert tone="danger">{error}</Alert> : null}
+          <Button type="submit" className="w-full" loading={submitting}>
             Sign in
           </Button>
         </form>
 
-        <p className="mt-4 text-xs text-[var(--color-muted)]">
+        <p className="mt-4 text-helper">
           Demo users are seeded locally (admin, management, accounting, project
           manager, viewer).
         </p>

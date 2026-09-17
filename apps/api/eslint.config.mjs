@@ -19,7 +19,9 @@ export default tseslint.config(
       },
       sourceType: 'commonjs',
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['test/*.ts', '*.mjs'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -31,5 +33,9 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'warn',
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
+  },
+  {
+    files: ['test/**/*.ts'],
+    ...tseslint.configs.disableTypeChecked,
   },
 );

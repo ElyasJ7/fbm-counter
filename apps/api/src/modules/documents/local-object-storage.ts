@@ -40,12 +40,12 @@ export class LocalObjectStorage implements ObjectStorageDriver {
     return { storageKey };
   }
 
-  async openReadStream(storageKey: string): Promise<Readable> {
-    return createReadStream(this.resolveKey(storageKey));
+  openReadStream(storageKey: string): Promise<Readable> {
+    return Promise.resolve(createReadStream(this.resolveKey(storageKey)));
   }
 
-  async fileExists(storageKey: string): Promise<boolean> {
-    return existsSync(this.resolveKey(storageKey));
+  fileExists(storageKey: string): Promise<boolean> {
+    return Promise.resolve(existsSync(this.resolveKey(storageKey)));
   }
 
   async deleteFile(storageKey: string): Promise<void> {

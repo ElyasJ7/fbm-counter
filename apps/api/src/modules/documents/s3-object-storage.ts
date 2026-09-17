@@ -67,10 +67,11 @@ export class S3ObjectStorage implements ObjectStorageDriver {
     return this.prefix ? `${this.prefix}/${cleaned}` : cleaned;
   }
 
-  async ensureReady(): Promise<void> {
+  ensureReady(): Promise<void> {
     this.logger.log(
       `S3 document storage ready (bucket=${this.bucket}, prefix=${this.prefix || '(none)'})`,
     );
+    return Promise.resolve();
   }
 
   getMaxUploadBytes(): number {

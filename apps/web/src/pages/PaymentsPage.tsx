@@ -11,8 +11,17 @@ import {
   PaymentMethodBadge,
   PaymentTypeBadge,
 } from '../components/finance/StatusBadges';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -211,9 +220,9 @@ export function PaymentsPage({
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -252,7 +261,7 @@ export function PaymentsPage({
         <EmptyState
           title="Keine Zahlungen"
           description="Erfassen Sie Zahlungseingänge und -ausgänge gegen Rechnungen."
-          actionLabel={canWrite ? 'Neue Zahlung' : undefined}
+          actionLabel={canWrite ? 'Record payment' : undefined}
           onAction={
             canWrite
               ? () => {
@@ -265,112 +274,113 @@ export function PaymentsPage({
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Nummer</th>
-                  <th className="px-3 py-2 font-medium">Rechnung</th>
+        <DataTable
+          footer={
+            <>
+              <span>
+                Seite {query.data.meta.page} von {query.data.meta.totalPages} (
+                {query.data.meta.total} gesamt)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Zurück
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= query.data.meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Weiter
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Nummer</th>
+                <th className={dataTableThClassName()}>Rechnung</th>
+                {!projectFilter ? (
+                  <th className={dataTableThClassName()}>Projekt</th>
+                ) : null}
+                <th className={dataTableThClassName()}>Typ</th>
+                <th className={dataTableThClassName()}>Art</th>
+                <th className={dataTableThClassName('right')}>Betrag</th>
+                <th className={dataTableThClassName()}>Datum</th>
+                <th className={dataTableThClassName()}>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.data.map((payment) => (
+                <tr key={payment.id} className={dataTableRowClassName()}>
+                  <td className={`${dataTableTdClassName()} font-medium`}>
+                    {payment.paymentNumber}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <Link
+                      className="text-brand hover:underline"
+                      to={`/invoices?search=${encodeURIComponent(payment.invoice.invoiceNumber)}`}
+                    >
+                      {payment.invoice.invoiceNumber}
+                    </Link>
+                  </td>
                   {!projectFilter ? (
-                    <th className="px-3 py-2 font-medium">Projekt</th>
-                  ) : null}
-                  <th className="px-3 py-2 font-medium">Typ</th>
-                  <th className="px-3 py-2 font-medium">Art</th>
-                  <th className="px-3 py-2 font-medium">Betrag</th>
-                  <th className="px-3 py-2 font-medium">Datum</th>
-                  <th className="px-3 py-2 font-medium">Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((payment) => (
-                  <tr key={payment.id} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium">
-                      {payment.paymentNumber}
-                    </td>
-                    <td className="px-3 py-3">
-                      <Link
-                        className="text-[var(--color-brand)] hover:underline"
-                        to={`/invoices?search=${encodeURIComponent(payment.invoice.invoiceNumber)}`}
-                      >
-                        {payment.invoice.invoiceNumber}
-                      </Link>
-                    </td>
-                    {!projectFilter ? (
-                      <td className="px-3 py-3">
-                        {payment.project ? (
-                          <Link
-                            className="text-[var(--color-brand)] hover:underline"
-                            to={`/projects/${payment.project.id}?tab=payments`}
-                          >
-                            {payment.project.projectNumber}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    ) : null}
-                    <td className="px-3 py-3">
-                      <PaymentTypeBadge type={payment.type} />
-                    </td>
-                    <td className="px-3 py-3">
-                      <PaymentMethodBadge method={payment.method} />
-                    </td>
-                    <td className="px-3 py-3">
-                      {formatCurrency(payment.amount)}
-                    </td>
-                    <td className="px-3 py-3">
-                      {formatDateDe(payment.paymentDate)}
-                    </td>
-                    <td className="px-3 py-3">
-                      {canWrite ? (
-                        <button
-                          type="button"
-                          className="text-[var(--color-danger)] hover:underline"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Zahlung „${payment.paymentNumber}“ löschen?`,
-                              )
-                            ) {
-                              deleteMutation.mutate(payment.id);
-                            }
-                          }}
+                    <td className={dataTableTdClassName()}>
+                      {payment.project ? (
+                        <Link
+                          className="text-brand hover:underline"
+                          to={`/projects/${payment.project.id}?tab=payments`}
                         >
-                          Löschen
-                        </button>
-                      ) : null}
+                          {payment.project.projectNumber}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-            <span>
-              Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-              {query.data.meta.total} gesamt)
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Zurück
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= query.data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Weiter
-              </Button>
-            </div>
-          </div>
-        </Card>
+                  ) : null}
+                  <td className={dataTableTdClassName()}>
+                    <PaymentTypeBadge type={payment.type} />
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <PaymentMethodBadge method={payment.method} />
+                  </td>
+                  <td className={dataTableTdClassName('right')}>
+                    <CurrencyValue value={payment.amount} size="sm" />
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {formatDateDe(payment.paymentDate)}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {canWrite ? (
+                      <button
+                        type="button"
+                        className="text-danger hover:underline"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Zahlung „${payment.paymentNumber}“ löschen?`,
+                            )
+                          ) {
+                            deleteMutation.mutate(payment.id);
+                          }
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </>
   );
@@ -379,7 +389,7 @@ export function PaymentsPage({
     return (
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-[var(--color-muted)]">
+          <p className="text-sm text-muted">
             Zahlungen für dieses Projekt
           </p>
           <div className="flex gap-2">
@@ -397,7 +407,7 @@ export function PaymentsPage({
                   setFormError(null);
                 }}
               >
-                Neue Zahlung
+                Record payment
               </Button>
             ) : null}
           </div>
@@ -410,8 +420,8 @@ export function PaymentsPage({
   return (
     <div>
       <PageHeader
-        title="Zahlungen"
-        description="Zahlungen gegen Rechnungen erfassen und abstimmen."
+        title="Payments"
+        description="Record and review invoice payments."
         actions={
           canWrite ? (
             <Button
@@ -421,7 +431,7 @@ export function PaymentsPage({
                 setFormError(null);
               }}
             >
-              Neue Zahlung
+              Record payment
             </Button>
           ) : null
         }

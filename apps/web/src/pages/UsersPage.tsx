@@ -9,9 +9,17 @@ import {
   type UserDto,
   type UserStatus,
 } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -79,7 +87,7 @@ export function UsersPage() {
     },
     onError: (error) => {
       setFormError(
-        error instanceof ApiError ? error.message : 'Anlegen fehlgeschlagen',
+        error instanceof ApiError ? error.message : 'Create failed',
       );
     },
   });
@@ -107,7 +115,7 @@ export function UsersPage() {
     },
     onError: (error) => {
       setFormError(
-        error instanceof ApiError ? error.message : 'Speichern fehlgeschlagen',
+        error instanceof ApiError ? error.message : 'Save failed',
       );
     },
   });
@@ -134,10 +142,10 @@ export function UsersPage() {
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Benutzer"
-        description="Rollen und Kontostatus verwalten."
+        title="Users"
+        description="Accounts, roles, and access."
         actions={
           canWrite ? (
             <Button
@@ -148,7 +156,7 @@ export function UsersPage() {
                 setFormError(null);
               }}
             >
-              Benutzer anlegen
+              New user
             </Button>
           ) : null
         }
@@ -162,20 +170,19 @@ export function UsersPage() {
 
       {query.error instanceof ApiError && query.error.status === 403 ? (
         <EmptyState
-          title="Zugriff eingeschränkt"
-          description={`Ihre Rolle (${user?.role}) darf Benutzer nicht auflisten.`}
+          title="Access restricted"
+          description={`Your role (${user?.role}) cannot list users.`}
         />
       ) : null}
 
       {query.error instanceof ApiError && query.error.status !== 403 ? (
-        <EmptyState
-          title="Benutzer konnten nicht geladen werden"
-          description={query.error.message}
-        />
+        <Alert tone="danger" title="Could not load users">
+          {query.error.message}
+        </Alert>
       ) : null}
 
       {showCreate && canWrite ? (
-        <Card className="mb-4" title="Neuen Benutzer anlegen">
+        <Card title="Create user">
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="E-Mail"
@@ -253,26 +260,26 @@ export function UsersPage() {
             />
           </div>
           {formError ? (
-            <p className="mt-3 text-sm text-[var(--color-danger)]" role="alert">
+            <Alert tone="danger" className="mt-3">
               {formError}
-            </p>
+            </Alert>
           ) : null}
           <div className="mt-4 flex gap-2">
             <Button
               onClick={() => createMutation.mutate()}
               disabled={createMutation.isPending}
             >
-              Anlegen
+              Create
             </Button>
             <Button variant="secondary" onClick={() => setShowCreate(false)}>
-              Abbrechen
+              Cancel
             </Button>
           </div>
         </Card>
       ) : null}
 
       {editingId && canWrite ? (
-        <Card className="mb-4" title="Benutzer bearbeiten">
+        <Card title="Edit user">
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="E-Mail"
@@ -340,16 +347,16 @@ export function UsersPage() {
             />
           </div>
           {formError ? (
-            <p className="mt-3 text-sm text-[var(--color-danger)]" role="alert">
+            <Alert tone="danger" className="mt-3">
               {formError}
-            </p>
+            </Alert>
           ) : null}
           <div className="mt-4 flex gap-2">
             <Button
               onClick={() => updateMutation.mutate()}
               disabled={updateMutation.isPending}
             >
-              Speichern
+              Save
             </Button>
             <Button
               variant="secondary"
@@ -358,82 +365,80 @@ export function UsersPage() {
                 setFormError(null);
               }}
             >
-              Abbrechen
+              Cancel
             </Button>
           </div>
         </Card>
       ) : null}
 
       {query.data ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">E-Mail</th>
-                  <th className="px-3 py-2 font-medium">Rolle</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Letzter Login</th>
+        <DataTable>
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Name</th>
+                <th className={dataTableThClassName()}>Email</th>
+                <th className={dataTableThClassName()}>Role</th>
+                <th className={dataTableThClassName()}>Status</th>
+                <th className={dataTableThClassName()}>Last login</th>
+                {canWrite ? (
+                  <th className={dataTableThClassName()}>Actions</th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.map((row) => (
+                <tr key={row.id} className={dataTableRowClassName()}>
+                  <td className={`${dataTableTdClassName()} font-medium`}>
+                    {row.firstName} {row.lastName}
+                  </td>
+                  <td className={dataTableTdClassName()}>{row.email}</td>
+                  <td className={dataTableTdClassName()}>
+                    <Badge tone="brand">{row.role}</Badge>
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <Badge tone={statusTone(row.status)}>
+                      {USER_STATUS_LABELS[row.status]}
+                    </Badge>
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {formatDateDe(row.lastLoginAt)}
+                  </td>
                   {canWrite ? (
-                    <th className="px-3 py-2 font-medium">Aktionen</th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium">
-                      {row.firstName} {row.lastName}
-                    </td>
-                    <td className="px-3 py-3">{row.email}</td>
-                    <td className="px-3 py-3">
-                      <Badge tone="brand">{row.role}</Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge tone={statusTone(row.status)}>
-                        {USER_STATUS_LABELS[row.status]}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      {formatDateDe(row.lastLoginAt)}
-                    </td>
-                    {canWrite ? (
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
+                    <td className={dataTableTdClassName()}>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => startEdit(row)}
+                        >
+                          Edit
+                        </Button>
+                        {row.status !== 'INACTIVE' && row.id !== user?.id ? (
                           <Button
                             size="sm"
-                            variant="secondary"
-                            onClick={() => startEdit(row)}
+                            variant="danger"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Deactivate user “${row.email}”?`,
+                                )
+                              ) {
+                                deactivateMutation.mutate(row.id);
+                              }
+                            }}
                           >
-                            Bearbeiten
+                            Deactivate
                           </Button>
-                          {row.status !== 'INACTIVE' && row.id !== user?.id ? (
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `Benutzer „${row.email}“ deaktivieren?`,
-                                  )
-                                ) {
-                                  deactivateMutation.mutate(row.id);
-                                }
-                              }}
-                            >
-                              Deaktivieren
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                        ) : null}
+                      </div>
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </div>
   );

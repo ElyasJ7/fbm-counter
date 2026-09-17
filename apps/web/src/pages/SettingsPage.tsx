@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { roleHasPermission } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FormSection } from '../components/ui/FormSection';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonCard } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
 import {
@@ -40,10 +42,10 @@ function Field({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
+      <p className="text-xs font-medium tracking-wide text-muted uppercase">
         {label}
       </p>
-      <p className="mt-1 text-sm text-[var(--color-ink)]">{value?.trim() || '—'}</p>
+      <p className="mt-1 text-sm text-ink">{value?.trim() || '—'}</p>
     </div>
   );
 }
@@ -114,21 +116,21 @@ export function SettingsPage() {
     },
     onError: (error) => {
       setFormError(
-        error instanceof ApiError ? error.message : 'Speichern fehlgeschlagen',
+        error instanceof ApiError ? error.message : 'Save failed',
       );
     },
   });
 
   if (!canRead) {
     return (
-      <div>
+      <div className="space-y-6">
         <PageHeader
-          title="Einstellungen"
-          description="Unternehmensprofil und Systemkonfiguration."
+          title="Settings"
+          description="Company profile and application preferences."
         />
         <EmptyState
-          title="Kein Zugriff"
-          description="Ihre Rolle darf Firmeneinstellungen nicht einsehen."
+          title="No access"
+          description="Your role cannot view company settings."
         />
       </div>
     );
@@ -136,27 +138,32 @@ export function SettingsPage() {
 
   if (query.isLoading) {
     return (
-      <div className="flex justify-center py-24">
-        <Spinner className="h-8 w-8" />
+      <div className="space-y-6">
+        <PageHeader
+          title="Settings"
+          description="Company profile and application preferences."
+        />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SkeletonCard className="h-48" />
+          <SkeletonCard className="h-48" />
+          <SkeletonCard className="h-32 lg:col-span-2" />
+        </div>
       </div>
     );
   }
 
   if (query.error || !query.data) {
     return (
-      <div>
+      <div className="space-y-6">
         <PageHeader
-          title="Einstellungen"
-          description="Unternehmensprofil und Systemkonfiguration."
+          title="Settings"
+          description="Company profile and application preferences."
         />
-        <EmptyState
-          title="Einstellungen konnten nicht geladen werden"
-          description={
-            query.error instanceof ApiError
-              ? query.error.message
-              : 'Unerwarteter Fehler'
-          }
-        />
+        <Alert tone="danger" title="Could not load settings">
+          {query.error instanceof ApiError
+            ? query.error.message
+            : 'Unexpected error'}
+        </Alert>
       </div>
     );
   }
@@ -164,10 +171,10 @@ export function SettingsPage() {
   const settings = query.data;
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Einstellungen"
-        description="Firmenprofil, Steuerdaten und Systemvorgaben."
+        title="Settings"
+        description="Company profile and application preferences."
         actions={
           canWrite && !editing ? (
             <Button
@@ -176,188 +183,159 @@ export function SettingsPage() {
                 setFormError(null);
               }}
             >
-              Bearbeiten
+              Edit
             </Button>
           ) : null
         }
       />
 
       {editing && canWrite ? (
-        <Card title="Firmeneinstellungen bearbeiten">
+        <Card title="Edit company settings">
           <form
-            className="space-y-6"
+            className="space-y-8"
             onSubmit={(e) => {
               e.preventDefault();
               saveMutation.mutate();
             }}
           >
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-[var(--color-ink)]">
-                Unternehmensprofil
-              </h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Input
-                  label="Firmenname"
-                  name="companyName"
-                  value={form.companyName}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, companyName: e.target.value }))
-                  }
-                  required
-                />
-                <Input
-                  label="Rechtlicher Name"
-                  name="legalName"
-                  value={form.legalName ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, legalName: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+            <FormSection title="Company profile">
+              <Input
+                label="Company name"
+                name="companyName"
+                value={form.companyName}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, companyName: e.target.value }))
+                }
+                required
+              />
+              <Input
+                label="Legal name"
+                name="legalName"
+                value={form.legalName ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, legalName: e.target.value }))
+                }
+              />
+            </FormSection>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-[var(--color-ink)]">
-                Adresse
-              </h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Input
-                  label="Straße"
-                  name="street"
-                  value={form.street ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, street: e.target.value }))
-                  }
-                />
-                <Input
-                  label="PLZ"
-                  name="postalCode"
-                  value={form.postalCode ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, postalCode: e.target.value }))
-                  }
-                />
-                <Input
-                  label="Ort"
-                  name="city"
-                  value={form.city ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, city: e.target.value }))
-                  }
-                />
-                <Input
-                  label="Land"
-                  name="country"
-                  value={form.country ?? 'DE'}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, country: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+            <FormSection title="Address">
+              <Input
+                label="Street"
+                name="street"
+                value={form.street ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, street: e.target.value }))
+                }
+              />
+              <Input
+                label="Postal code"
+                name="postalCode"
+                value={form.postalCode ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, postalCode: e.target.value }))
+                }
+              />
+              <Input
+                label="City"
+                name="city"
+                value={form.city ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, city: e.target.value }))
+                }
+              />
+              <Input
+                label="Country"
+                name="country"
+                value={form.country ?? 'DE'}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, country: e.target.value }))
+                }
+              />
+            </FormSection>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-[var(--color-ink)]">
-                Steuern
-              </h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Input
-                  label="USt-IdNr."
-                  name="vatId"
-                  value={form.vatId ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, vatId: e.target.value }))
-                  }
-                />
-                <Input
-                  label="Steuernummer"
-                  name="taxNumber"
-                  value={form.taxNumber ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, taxNumber: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+            <FormSection title="Tax">
+              <Input
+                label="VAT ID"
+                name="vatId"
+                value={form.vatId ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, vatId: e.target.value }))
+                }
+              />
+              <Input
+                label="Tax number"
+                name="taxNumber"
+                value={form.taxNumber ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, taxNumber: e.target.value }))
+                }
+              />
+            </FormSection>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-[var(--color-ink)]">
-                Bankverbindung
-              </h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Input
-                  label="IBAN"
-                  name="iban"
-                  value={form.iban ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, iban: e.target.value }))
-                  }
-                />
-                <Input
-                  label="BIC"
-                  name="bic"
-                  value={form.bic ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, bic: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+            <FormSection title="Bank details">
+              <Input
+                label="IBAN"
+                name="iban"
+                value={form.iban ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, iban: e.target.value }))
+                }
+              />
+              <Input
+                label="BIC"
+                name="bic"
+                value={form.bic ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, bic: e.target.value }))
+                }
+              />
+            </FormSection>
 
-            <div>
-              <h3 className="mb-3 text-sm font-semibold text-[var(--color-ink)]">
-                Systemvorgaben
-              </h3>
-              <div className="grid gap-3 md:grid-cols-3">
-                <Input
-                  label="Standardwährung"
-                  name="defaultCurrency"
-                  value={form.defaultCurrency ?? 'EUR'}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      defaultCurrency: e.target.value,
-                    }))
-                  }
-                />
-                <Input
-                  label="Standard-MwSt. %"
-                  name="defaultVatRate"
-                  value={form.defaultVatRate ?? '19'}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      defaultVatRate: e.target.value,
-                    }))
-                  }
-                />
-                <Input
-                  label="Rechnungspräfix (Ausgang)"
-                  name="invoicePrefix"
-                  value={form.invoicePrefix ?? 'RE'}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      invoicePrefix: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <p className="mt-2 text-xs text-[var(--color-muted)]">
-                Der Rechnungspräfix gilt für Ausgangsrechnungen. Eingangsrechnungen
-                nutzen weiterhin ER.
-              </p>
-            </div>
+            <FormSection title="Defaults">
+              <Input
+                label="Default currency"
+                name="defaultCurrency"
+                value={form.defaultCurrency ?? 'EUR'}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    defaultCurrency: e.target.value,
+                  }))
+                }
+              />
+              <Input
+                label="Default VAT %"
+                name="defaultVatRate"
+                value={form.defaultVatRate ?? '19'}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    defaultVatRate: e.target.value,
+                  }))
+                }
+              />
+              <Input
+                label="Invoice prefix (outgoing)"
+                name="invoicePrefix"
+                value={form.invoicePrefix ?? 'RE'}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    invoicePrefix: e.target.value,
+                  }))
+                }
+              />
+            </FormSection>
+            <p className="-mt-4 text-xs text-muted">
+              The invoice prefix applies to outgoing invoices. Incoming invoices
+              continue to use ER.
+            </p>
 
-            {formError ? (
-              <p className="text-sm text-[var(--color-danger)]" role="alert">
-                {formError}
-              </p>
-            ) : null}
+            {formError ? <Alert tone="danger">{formError}</Alert> : null}
 
             <div className="flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? 'Speichern…' : 'Speichern'}
+                {saveMutation.isPending ? 'Saving…' : 'Save'}
               </Button>
               <Button
                 type="button"
@@ -384,48 +362,48 @@ export function SettingsPage() {
                   }
                 }}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Unternehmensprofil">
+          <Card title="Company profile">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Firmenname" value={settings.companyName} />
-              <Field label="Rechtlicher Name" value={settings.legalName} />
-              <Field label="Straße" value={settings.street} />
-              <Field label="PLZ" value={settings.postalCode} />
-              <Field label="Ort" value={settings.city} />
-              <Field label="Land" value={settings.country} />
+              <Field label="Company name" value={settings.companyName} />
+              <Field label="Legal name" value={settings.legalName} />
+              <Field label="Street" value={settings.street} />
+              <Field label="Postal code" value={settings.postalCode} />
+              <Field label="City" value={settings.city} />
+              <Field label="Country" value={settings.country} />
             </div>
           </Card>
 
-          <Card title="Steuern & Bank">
+          <Card title="Tax & bank">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="USt-IdNr." value={settings.vatId} />
-              <Field label="Steuernummer" value={settings.taxNumber} />
+              <Field label="VAT ID" value={settings.vatId} />
+              <Field label="Tax number" value={settings.taxNumber} />
               <Field label="IBAN" value={settings.iban} />
               <Field label="BIC" value={settings.bic} />
             </div>
           </Card>
 
-          <Card title="Systemvorgaben" className="lg:col-span-2">
+          <Card title="Defaults" className="lg:col-span-2">
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Standardwährung" value={settings.defaultCurrency} />
+              <Field label="Default currency" value={settings.defaultCurrency} />
               <Field
-                label="Standard-MwSt."
+                label="Default VAT"
                 value={`${settings.defaultVatRate} %`}
               />
               <Field
-                label="Rechnungspräfix"
+                label="Invoice prefix"
                 value={settings.invoicePrefix}
               />
             </div>
             {!canWrite ? (
-              <p className="mt-4 text-xs text-[var(--color-muted)]">
-                Nur Administratoren können Einstellungen ändern.
+              <p className="mt-4 text-xs text-muted">
+                Only administrators can change settings.
               </p>
             ) : null}
           </Card>

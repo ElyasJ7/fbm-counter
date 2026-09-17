@@ -127,6 +127,7 @@ export class ProjectsService {
     search?: string;
     status?: ProjectStatus;
     customerId?: string;
+    projectManagerId?: string;
   }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
@@ -136,6 +137,9 @@ export class ProjectsService {
       deletedAt: null,
       ...(params.status ? { status: params.status } : {}),
       ...(params.customerId ? { customerId: params.customerId } : {}),
+      ...(params.projectManagerId
+        ? { projectManagerId: params.projectManagerId }
+        : {}),
       ...(search
         ? {
             OR: [

@@ -11,12 +11,21 @@ import {
 } from '../components/finance/StatusBadges';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonCard } from '../components/ui/Skeleton';
+import { StatCard } from '../components/ui/StatCard';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency, formatDateDe } from '../lib/format';
+import { formatDateDe } from '../lib/format';
 import { fetchDashboard } from '../services/dashboard';
 import {
   fetchExpenses,
@@ -30,28 +39,6 @@ const OPEN_STATUSES: InvoiceStatus[] = [
   'PARTIALLY_PAID',
   'OVERDUE',
 ];
-
-function KpiCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-semibold text-[var(--color-ink)]">{value}</p>
-      {hint ? (
-        <p className="mt-1 text-xs text-[var(--color-muted)]">{hint}</p>
-      ) : null}
-    </div>
-  );
-}
 
 function remaining(gross: string, paid: string) {
   return (Number(gross) - Number(paid)).toFixed(4);
@@ -112,14 +99,14 @@ export function FinancesPage() {
 
   if (!canRead) {
     return (
-      <div>
+      <div className="space-y-4">
         <PageHeader
-          title="Finanzen"
-          description="Unternehmensweite Liquidität und offene Posten."
+          title="Finances"
+          description="Company-wide cash position and open items."
         />
         <EmptyState
-          title="Kein Zugriff"
-          description="Ihre Rolle darf Finanzübersichten nicht einsehen."
+          title="No access"
+          description="Your role cannot view the finance overview."
         />
       </div>
     );
@@ -133,25 +120,29 @@ export function FinancesPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-24">
-        <Spinner className="h-8 w-8" />
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (dashboardQuery.error) {
     return (
-      <div>
+      <div className="space-y-4">
         <PageHeader
-          title="Finanzen"
-          description="Unternehmensweite Liquidität und offene Posten."
+          title="Finances"
+          description="Company-wide cash position and open items."
         />
         <EmptyState
-          title="Finanzen konnten nicht geladen werden"
+          title="Could not load finances"
           description={
             dashboardQuery.error instanceof ApiError
               ? dashboardQuery.error.message
-              : 'Unerwarteter Fehler'
+              : 'Unexpected error'
           }
         />
       </div>
@@ -168,269 +159,286 @@ export function FinancesPage() {
   const payments = paymentsQuery.data?.data ?? [];
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Finanzen"
-        description="Liquidität, offene Forderungen/Verbindlichkeiten und letzte Zahlungen."
+        title="Finances"
+        description="Liquidity, receivables, payables, and recent payments."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link to="/invoices">
-              <Button variant="secondary">Rechnungen</Button>
+              <Button variant="secondary">Invoices</Button>
             </Link>
             <Link to="/expenses">
-              <Button variant="secondary">Ausgaben</Button>
+              <Button variant="secondary">Expenses</Button>
             </Link>
             <Link to="/payments">
-              <Button variant="secondary">Zahlungen</Button>
+              <Button variant="secondary">Payments</Button>
             </Link>
             <Link to="/reports">
-              <Button>Berichte</Button>
+              <Button>Reports</Button>
             </Link>
           </div>
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <KpiCard
-          label="Verfügbare Liquidität"
-          value={formatCurrency(kpis.availableCash, currency)}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          label="Available cash"
+          value={
+            <CurrencyValue value={kpis.availableCash} currency={currency} size="lg" />
+          }
+          tone="brand"
         />
-        <KpiCard
-          label="Offene Forderungen"
-          value={formatCurrency(kpis.outstandingCustomerInvoices, currency)}
-          hint="Kundenrechnungen"
+        <StatCard
+          label="Accounts receivable"
+          value={
+            <CurrencyValue
+              value={kpis.outstandingCustomerInvoices}
+              currency={currency}
+              size="lg"
+            />
+          }
+          hint="Customer invoices"
+          tone="info"
         />
-        <KpiCard
-          label="Offene Verbindlichkeiten"
-          value={formatCurrency(kpis.outstandingSupplierInvoices, currency)}
-          hint="Lieferantenrechnungen"
+        <StatCard
+          label="Accounts payable"
+          value={
+            <CurrencyValue
+              value={kpis.outstandingSupplierInvoices}
+              currency={currency}
+              size="lg"
+            />
+          }
+          hint="Supplier invoices"
         />
-        <KpiCard
-          label="Gesamterlös"
-          value={formatCurrency(kpis.totalRevenue, currency)}
+        <StatCard
+          label="Cash received"
+          value={
+            <CurrencyValue value={kpis.totalRevenue} currency={currency} size="lg" />
+          }
         />
-        <KpiCard
-          label="Gesamtausgaben"
-          value={formatCurrency(kpis.totalExpenses, currency)}
+        <StatCard
+          label="Actual costs"
+          value={
+            <CurrencyValue value={kpis.totalExpenses} currency={currency} size="lg" />
+          }
         />
-        <KpiCard
-          label="Bruttogewinn"
-          value={formatCurrency(kpis.grossProfit, currency)}
+        <StatCard
+          label="Gross profit"
+          value={
+            <CurrencyValue value={kpis.grossProfit} currency={currency} size="lg" />
+          }
+          tone="success"
         />
       </div>
 
-      <div className="mb-6 grid gap-4 xl:grid-cols-2">
-        <Card title="Offene Forderungen (AR)" description="Ausgangsrechnungen">
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Accounts receivable" description="Open customer invoices">
           {openAr.length === 0 ? (
             <EmptyState
-              title="Keine offenen Forderungen"
-              description="Alle Kundenrechnungen sind ausgeglichen oder noch Entwürfe."
+              title="No open receivables"
+              description="Customer invoices are settled or still drafts."
             />
           ) : (
-            <div className="overflow-x-auto">
+            <DataTable className="border-0 shadow-none">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Rechnung</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Fällig</th>
-                    <th className="px-3 py-2 font-medium">Restbetrag</th>
+                    <th className={dataTableThClassName()}>Invoice</th>
+                    <th className={dataTableThClassName()}>Status</th>
+                    <th className={dataTableThClassName()}>Due</th>
+                    <th className={dataTableThClassName('right')}>Remaining</th>
                   </tr>
                 </thead>
                 <tbody>
                   {openAr.slice(0, 15).map((invoice) => (
-                    <tr
-                      key={invoice.id}
-                      className="border-b border-[var(--color-border)] last:border-0"
-                    >
-                      <td className="px-3 py-3">
+                    <tr key={invoice.id} className={dataTableRowClassName()}>
+                      <td className={dataTableTdClassName()}>
                         <Link
                           to="/invoices"
-                          className="font-medium text-[var(--color-accent)] hover:underline"
+                          className="font-medium text-brand hover:underline"
                         >
                           {invoice.invoiceNumber}
                         </Link>
-                        <div className="text-xs text-[var(--color-muted)]">
+                        <div className="text-xs text-muted">
                           {invoice.customer?.companyName ?? '—'}
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         <InvoiceStatusBadge status={invoice.status} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {formatDateDe(invoice.dueDate)}
                       </td>
-                      <td className="px-3 py-3 font-medium">
-                        {formatCurrency(
-                          remaining(invoice.grossAmount, invoice.paidAmount),
-                          currency,
-                        )}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue
+                          value={remaining(invoice.grossAmount, invoice.paidAmount)}
+                          currency={currency}
+                          size="sm"
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTable>
           )}
         </Card>
 
-        <Card title="Offene Verbindlichkeiten (AP)" description="Eingangsrechnungen">
+        <Card title="Accounts payable" description="Open supplier invoices">
           {openAp.length === 0 ? (
             <EmptyState
-              title="Keine offenen Verbindlichkeiten"
-              description="Keine offenen Lieferantenrechnungen."
+              title="No open payables"
+              description="No open supplier invoices."
             />
           ) : (
-            <div className="overflow-x-auto">
+            <DataTable className="border-0 shadow-none">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Rechnung</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Fällig</th>
-                    <th className="px-3 py-2 font-medium">Restbetrag</th>
+                    <th className={dataTableThClassName()}>Invoice</th>
+                    <th className={dataTableThClassName()}>Status</th>
+                    <th className={dataTableThClassName()}>Due</th>
+                    <th className={dataTableThClassName('right')}>Remaining</th>
                   </tr>
                 </thead>
                 <tbody>
                   {openAp.slice(0, 15).map((invoice) => (
-                    <tr
-                      key={invoice.id}
-                      className="border-b border-[var(--color-border)] last:border-0"
-                    >
-                      <td className="px-3 py-3">
+                    <tr key={invoice.id} className={dataTableRowClassName()}>
+                      <td className={dataTableTdClassName()}>
                         <Link
                           to="/invoices"
-                          className="font-medium text-[var(--color-accent)] hover:underline"
+                          className="font-medium text-brand hover:underline"
                         >
                           {invoice.invoiceNumber}
                         </Link>
-                        <div className="text-xs text-[var(--color-muted)]">
+                        <div className="text-xs text-muted">
                           {invoice.supplier?.companyName ?? '—'}
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         <InvoiceStatusBadge status={invoice.status} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {formatDateDe(invoice.dueDate)}
                       </td>
-                      <td className="px-3 py-3 font-medium">
-                        {formatCurrency(
-                          remaining(invoice.grossAmount, invoice.paidAmount),
-                          currency,
-                        )}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue
+                          value={remaining(invoice.grossAmount, invoice.paidAmount)}
+                          currency={currency}
+                          size="sm"
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTable>
           )}
         </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card
-          title="Freigegebene Ausgaben"
-          description="Ausgaben mit Restbetrag"
-        >
+        <Card title="Approved expenses" description="Expenses with remaining balance">
           {openExpenses.length === 0 ? (
             <EmptyState
-              title="Keine offenen Ausgaben"
-              description="Keine freigegebenen Ausgaben mit Restbetrag."
+              title="No open expenses"
+              description="No approved expenses with a remaining balance."
             />
           ) : (
-            <div className="overflow-x-auto">
+            <DataTable className="border-0 shadow-none">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Ausgabe</th>
-                    <th className="px-3 py-2 font-medium">Fällig</th>
-                    <th className="px-3 py-2 font-medium">Restbetrag</th>
+                    <th className={dataTableThClassName()}>Expense</th>
+                    <th className={dataTableThClassName()}>Due</th>
+                    <th className={dataTableThClassName('right')}>Remaining</th>
                   </tr>
                 </thead>
                 <tbody>
                   {openExpenses.map((expense) => (
-                    <tr
-                      key={expense.id}
-                      className="border-b border-[var(--color-border)] last:border-0"
-                    >
-                      <td className="px-3 py-3">
+                    <tr key={expense.id} className={dataTableRowClassName()}>
+                      <td className={dataTableTdClassName()}>
                         <div className="font-medium">{expense.expenseNumber}</div>
-                        <div className="text-xs text-[var(--color-muted)]">
+                        <div className="text-xs text-muted">
                           {expense.description}
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {formatDateDe(expense.dueDate)}
                       </td>
-                      <td className="px-3 py-3 font-medium">
-                        {formatCurrency(
-                          remaining(expense.grossAmount, expense.paidAmount),
-                          currency,
-                        )}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue
+                          value={remaining(expense.grossAmount, expense.paidAmount)}
+                          currency={currency}
+                          size="sm"
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTable>
           )}
         </Card>
 
-        <Card title="Letzte Zahlungen" description="Neueste Zahlungseinträge">
+        <Card title="Recent payments" description="Latest payment entries">
           {payments.length === 0 ? (
             <EmptyState
-              title="Keine Zahlungen"
-              description="Zahlungen erscheinen hier nach der Erfassung."
+              title="No payments"
+              description="Payments appear here after recording."
             />
           ) : (
-            <div className="overflow-x-auto">
+            <DataTable className="border-0 shadow-none">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Zahlung</th>
-                    <th className="px-3 py-2 font-medium">Typ</th>
-                    <th className="px-3 py-2 font-medium">Datum</th>
-                    <th className="px-3 py-2 font-medium">Betrag</th>
+                    <th className={dataTableThClassName()}>Payment</th>
+                    <th className={dataTableThClassName()}>Type</th>
+                    <th className={dataTableThClassName()}>Date</th>
+                    <th className={dataTableThClassName('right')}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map((payment) => (
-                    <tr
-                      key={payment.id}
-                      className="border-b border-[var(--color-border)] last:border-0"
-                    >
-                      <td className="px-3 py-3">
+                    <tr key={payment.id} className={dataTableRowClassName()}>
+                      <td className={dataTableTdClassName()}>
                         <div className="font-medium">{payment.paymentNumber}</div>
-                        <div className="text-xs text-[var(--color-muted)]">
+                        <div className="text-xs text-muted">
                           {payment.invoice.invoiceNumber}
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         <PaymentTypeBadge type={payment.type} />
                         <span className="sr-only">
                           {PAYMENT_TYPE_LABELS[payment.type]}
                         </span>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {formatDateDe(payment.paymentDate)}
                       </td>
-                      <td className="px-3 py-3 font-medium">
-                        {formatCurrency(payment.amount, currency)}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue
+                          value={payment.amount}
+                          currency={currency}
+                          size="sm"
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DataTable>
           )}
         </Card>
       </div>
 
-          <p className="mt-4 text-xs text-[var(--color-muted)]">
-            Offene Posten: Status SENT, OPEN, PARTIALLY_PAID, OVERDUE.
-          </p>
+      <p className="text-helper">
+        Cost totals follow the invoice-wins policy (duplicate expense+invoice
+        amounts are not double-counted). Open items use statuses SENT, OPEN,
+        PARTIALLY_PAID, and OVERDUE.
+      </p>
     </div>
   );
 }

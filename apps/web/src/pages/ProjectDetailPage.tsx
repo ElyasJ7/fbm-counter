@@ -17,14 +17,19 @@ import {
 import { ProjectStatusBadge } from '../components/projects/ProjectStatusBadge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
 import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
+import { ProgressBar } from '../components/ui/ProgressBar';
 import { Select } from '../components/ui/Select';
+import { SkeletonCard } from '../components/ui/Skeleton';
 import { Spinner } from '../components/ui/Spinner';
+import { StatCard } from '../components/ui/StatCard';
+import { Tabs } from '../components/ui/Tabs';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { cn } from '../lib/cn';
 import { formatCurrency, formatDateDe } from '../lib/format';
 import {
   fetchProjectBudget,
@@ -62,15 +67,15 @@ const READY_TABS = [
 type ReadyTab = (typeof READY_TABS)[number];
 
 const tabs = [
-  { id: 'overview', label: 'Übersicht', ready: true },
-  { id: 'financials', label: 'Finanzen', ready: true },
-  { id: 'budget', label: 'Budget', ready: true },
-  { id: 'expenses', label: 'Ausgaben', ready: true },
-  { id: 'invoices', label: 'Rechnungen', ready: true },
-  { id: 'payments', label: 'Zahlungen', ready: true },
-  { id: 'subcontractors', label: 'Nachunternehmer', ready: true },
-  { id: 'documents', label: 'Dokumente', ready: true },
-  { id: 'activity', label: 'Aktivität', ready: true },
+  { id: 'overview', label: 'Overview' },
+  { id: 'financials', label: 'Financials' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'expenses', label: 'Expenses' },
+  { id: 'invoices', label: 'Invoices' },
+  { id: 'payments', label: 'Payments' },
+  { id: 'subcontractors', label: 'Subcontractors' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'activity', label: 'Activity' },
 ] as const;
 
 function isReadyTab(value: string | null): value is ReadyTab {
@@ -81,21 +86,20 @@ function Metric({
   label,
   value,
   hint,
+  emphasize,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   hint?: string;
+  emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-[var(--color-border)] bg-slate-50 p-4">
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
-        {label}
-      </p>
-      <p className="mt-2 text-lg font-semibold text-[var(--color-ink)]">{value}</p>
-      {hint ? (
-        <p className="mt-1 text-xs text-[var(--color-muted)]">{hint}</p>
-      ) : null}
-    </div>
+    <StatCard
+      label={label}
+      value={value}
+      hint={hint}
+      className={emphasize ? undefined : 'bg-background/50 shadow-none'}
+    />
   );
 }
 
@@ -200,7 +204,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
         Geplante Beträge je Kostenkategorie. Ist- und gebunden Werte werden aus
         Ausgaben synchronisiert.
       </p>
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             <tr>
@@ -295,7 +299,6 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
 }
 
 function ProjectFinancialsTab({
-  projectId,
   overview,
   currency,
   onTab,
@@ -319,42 +322,64 @@ function ProjectFinancialsTab({
 }) {
   return (
     <div className="space-y-4">
-      <Card title="Finanzlage" description="Kennzahlen aus Projektfinanzen">
+      <Card title="Financial position" description="Project finance KPIs">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Metric
-            label="Auftragswert"
-            value={formatCurrency(overview.contractValue, currency)}
+            label="Contract value"
+            value={
+              <CurrencyValue value={overview.contractValue} currency={currency} size="md" />
+            }
+            emphasize
           />
           <Metric
-            label="Budget"
-            value={formatCurrency(overview.budget, currency)}
+            label="Current budget"
+            value={
+              <CurrencyValue value={overview.budget} currency={currency} size="md" />
+            }
+            emphasize
           />
           <Metric
-            label="Ist-Kosten"
-            value={formatCurrency(overview.actualCosts, currency)}
+            label="Actual cost"
+            value={
+              <CurrencyValue value={overview.actualCosts} currency={currency} size="md" />
+            }
+            emphasize
           />
           <Metric
-            label="Gebunden"
-            value={formatCurrency(overview.committedCosts, currency)}
+            label="Committed"
+            value={
+              <CurrencyValue value={overview.committedCosts} currency={currency} size="md" />
+            }
           />
           <Metric
-            label="Erlöse erhalten"
-            value={formatCurrency(overview.revenueReceived, currency)}
+            label="Cash received"
+            value={
+              <CurrencyValue value={overview.revenueReceived} currency={currency} size="md" />
+            }
+            emphasize
           />
           <Metric
-            label="Erlöse offen"
-            value={formatCurrency(overview.outstandingRevenue, currency)}
+            label="Accounts receivable"
+            value={
+              <CurrencyValue value={overview.outstandingRevenue} currency={currency} size="md" />
+            }
+            emphasize
           />
           <Metric
-            label="Aktueller Gewinn"
-            value={formatCurrency(overview.currentProfit, currency)}
+            label="Current profit"
+            value={
+              <CurrencyValue value={overview.currentProfit} currency={currency} size="md" />
+            }
+            emphasize
           />
           <Metric
-            label="Prognosegewinn"
-            value={formatCurrency(overview.projectedProfit, currency)}
+            label="Projected profit"
+            value={
+              <CurrencyValue value={overview.projectedProfit} currency={currency} size="md" />
+            }
           />
           <Metric
-            label="Marge"
+            label="Margin"
             value={
               overview.profitMarginPercent !== null
                 ? `${overview.profitMarginPercent.replace('.', ',')} %`
@@ -362,40 +387,39 @@ function ProjectFinancialsTab({
             }
           />
           <Metric
-            label="Restbudget"
-            value={formatCurrency(overview.remainingBudget, currency)}
+            label="Remaining budget"
+            value={
+              <CurrencyValue value={overview.remainingBudget} currency={currency} size="md" />
+            }
           />
         </div>
         {!overview.financeDataAvailable ? (
-          <p className="mt-4 text-sm text-[var(--color-muted)]">
-            Noch keine Finanzbewegungen für dieses Projekt.
+          <p className="mt-4 text-sm text-muted">
+            No financial movements for this project yet.
           </p>
         ) : null}
       </Card>
-      <Card title="Schnellzugriff">
+      <Card title="Quick links">
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => onTab('budget')}>
             Budget
           </Button>
           <Button variant="secondary" onClick={() => onTab('expenses')}>
-            Ausgaben
+            Expenses
           </Button>
           <Button variant="secondary" onClick={() => onTab('invoices')}>
-            Rechnungen
+            Invoices
           </Button>
           <Button variant="secondary" onClick={() => onTab('payments')}>
-            Zahlungen
+            Payments
           </Button>
           <Link to={`/reports`}>
-            <Button variant="secondary">Unternehmensberichte</Button>
+            <Button variant="secondary">Reports</Button>
           </Link>
           <Link to={`/finances`}>
-            <Button variant="secondary">Finanzübersicht</Button>
+            <Button variant="secondary">Finances</Button>
           </Link>
         </div>
-        <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Projekt-ID {projectId}
-        </p>
       </Card>
     </div>
   );
@@ -536,7 +560,7 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
             description="Weisen Sie Nachunternehmer diesem Projekt zu."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 <tr>
@@ -661,7 +685,7 @@ function ProjectActivityTab({ projectId }: { projectId: string }) {
 
   return (
     <Card title="Aktivitätsprotokoll" description="Letzte 50 Ereignisse">
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             <tr>
@@ -738,24 +762,38 @@ export function ProjectDetailPage() {
 
   if (query.isLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner className="h-8 w-8" />
+      <div className="space-y-4">
+        <SkeletonCard className="h-24" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (query.error || !query.data) {
     return (
-      <EmptyState
-        title="Projekt nicht gefunden"
-        description={
-          query.error instanceof ApiError
-            ? query.error.message
-            : 'Das angeforderte Projekt konnte nicht geladen werden.'
-        }
-        actionLabel="Zurück zu Projekten"
-        onAction={() => navigate('/projects')}
-      />
+      <div className="space-y-4">
+        <PageHeader
+          title="Project"
+          breadcrumbs={[
+            { label: 'Projects', to: '/projects' },
+            { label: 'Not found' },
+          ]}
+        />
+        <ErrorState
+          title="Project not found"
+          description={
+            query.error instanceof ApiError
+              ? query.error.message
+              : 'The requested project could not be loaded.'
+          }
+          actionLabel="Back to projects"
+          actionTo="/projects"
+        />
+      </div>
     );
   }
 
@@ -773,220 +811,250 @@ export function ProjectDetailPage() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={project.name}
         description={`${project.projectNumber} · ${project.customer.companyName}`}
+        breadcrumbs={[
+          { label: 'Projects', to: '/projects' },
+          { label: project.projectNumber },
+        ]}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link to="/projects">
-              <Button variant="secondary">Alle Projekte</Button>
-            </Link>
             {canWrite ? (
               <Link to={`/projects/${project.id}/edit`}>
-                <Button variant="secondary">Bearbeiten</Button>
+                <Button variant="secondary">Edit</Button>
               </Link>
             ) : null}
             {canDelete ? (
               <Button
                 variant="danger"
+                loading={deleteMutation.isPending}
                 onClick={() => {
                   if (
                     window.confirm(
-                      `Projekt „${project.projectNumber}“ löschen?`,
+                      `Delete project “${project.projectNumber}”?`,
                     )
                   ) {
                     deleteMutation.mutate();
                   }
                 }}
               >
-                Löschen
+                Delete
               </Button>
             ) : null}
           </div>
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <ProjectStatusBadge status={project.status} />
-        <span className="text-sm text-[var(--color-muted)]">
-          Fortschritt {project.progressPercent}%
-        </span>
-        {project.projectManager ? (
-          <span className="text-sm text-[var(--color-muted)]">
-            PM: {project.projectManager.firstName}{' '}
-            {project.projectManager.lastName}
-          </span>
-        ) : null}
-      </div>
+      <Card padding="sm" className="!shadow-none">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <ProjectStatusBadge status={project.status} />
+            {project.projectManager ? (
+              <span className="text-sm text-muted">
+                Manager:{' '}
+                <span className="font-medium text-ink">
+                  {project.projectManager.firstName}{' '}
+                  {project.projectManager.lastName}
+                </span>
+              </span>
+            ) : (
+              <span className="text-sm text-muted">No manager assigned</span>
+            )}
+            <span className="text-sm text-muted">
+              Customer:{' '}
+              <span className="font-medium text-ink">
+                {project.customer.companyName}
+              </span>
+            </span>
+          </div>
+          <div className="w-full max-w-xs">
+            <p className="mb-1 text-caption">Progress</p>
+            <ProgressBar value={project.progressPercent} />
+          </div>
+        </div>
+      </Card>
 
-      <div
-        className="mb-6 flex gap-1 overflow-x-auto border-b border-[var(--color-border)]"
-        role="tablist"
-        aria-label="Projektbereiche"
-      >
-        {tabs.map((tab) => {
-          const selected = tab.id === activeTab;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              disabled={!tab.ready}
-              onClick={() => {
-                if (tab.ready) setTab(tab.id as ReadyTab);
-              }}
-              className={cn(
-                'shrink-0 px-3 py-2 text-sm font-medium',
-                selected
-                  ? 'border-b-2 border-[var(--color-brand)] text-[var(--color-brand)]'
-                  : 'text-[var(--color-muted)]',
-                !tab.ready && 'cursor-not-allowed opacity-50',
-              )}
-              title={tab.ready ? undefined : 'Verfügbar in einer späteren Phase'}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs
+        aria-label="Project sections"
+        items={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}
+        value={activeTab}
+        onChange={(id) => setTab(id as ReadyTab)}
+      />
 
       {activeTab === 'overview' ? (
         <div className="grid gap-4 xl:grid-cols-3">
-          <Card className="xl:col-span-2" title="Projektübersicht">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Metric
-                label="Auftragswert"
-                value={formatCurrency(overview.contractValue, overview.currency)}
-              />
-              <Metric
-                label="Aktuelles Budget"
-                value={formatCurrency(overview.budget, overview.currency)}
-              />
-              <Metric
-                label="Ist-Kosten"
-                value={formatCurrency(overview.actualCosts, overview.currency)}
-                hint={
-                  overview.financeDataAvailable
-                    ? 'Aus Ausgaben'
-                    : undefined
-                }
-              />
-              <Metric
-                label="Gebundene Kosten"
-                value={formatCurrency(
-                  overview.committedCosts,
-                  overview.currency,
-                )}
-                hint={
-                  overview.financeDataAvailable
-                    ? 'Aus offenen Verpflichtungen'
-                    : undefined
-                }
-              />
-              <Metric
-                label="Erhaltene Erlöse"
-                value={formatCurrency(
-                  overview.revenueReceived,
-                  overview.currency,
-                )}
-                hint={
-                  overview.financeDataAvailable
-                    ? 'Aus Kundenzahlungen'
-                    : undefined
-                }
-              />
-              <Metric
-                label="Offene Erlöse"
-                value={formatCurrency(
-                  overview.outstandingRevenue,
-                  overview.currency,
-                )}
-                hint={
-                  overview.financeDataAvailable
-                    ? 'Aus offenen Ausgangsrechnungen'
-                    : undefined
-                }
-              />
-              <Metric
-                label="Aktueller Gewinn"
-                value={formatCurrency(overview.currentProfit, overview.currency)}
-                hint="Erlöse − Ist-Kosten"
-              />
-              <Metric
-                label="Prognostizierter Gewinn"
-                value={formatCurrency(
-                  overview.projectedProfit,
-                  overview.currency,
-                )}
-                hint="Auftrag − Prognosekosten"
-              />
-              <Metric
-                label="Gewinnmarge"
-                value={
-                  overview.profitMarginPercent !== null
-                    ? `${overview.profitMarginPercent.replace('.', ',')} %`
-                    : '—'
-                }
-              />
-              <Metric
-                label="Restbudget"
-                value={formatCurrency(
-                  overview.remainingBudget,
-                  overview.currency,
-                )}
-                hint="Budget − Ist − gebunden"
-              />
-            </div>
-            {!overview.financeDataAvailable ? (
-              <p className="mt-4 text-sm text-[var(--color-muted)]">
-                Kosten- und Erlösdaten sind noch null, bis Rechnungen, Zahlungen
-                und Ausgaben für dieses Projekt erfasst werden. Der
-                prognostizierte Gewinn entspricht derzeit dem Auftragswert, weil
-                noch keine Prognosekosten vorliegen.
-              </p>
-            ) : null}
-          </Card>
+          <div className="space-y-4 xl:col-span-2">
+            <Card
+              title="Financial summary"
+              description="Contract, budget, costs, cash, and profit"
+            >
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Metric
+                  label="Contract value"
+                  value={
+                    <CurrencyValue
+                      value={overview.contractValue}
+                      currency={overview.currency}
+                      size="md"
+                    />
+                  }
+                  emphasize
+                />
+                <Metric
+                  label="Current budget"
+                  value={
+                    <CurrencyValue
+                      value={overview.budget}
+                      currency={overview.currency}
+                      size="md"
+                    />
+                  }
+                  emphasize
+                />
+                <Metric
+                  label="Actual cost"
+                  value={
+                    <CurrencyValue
+                      value={overview.actualCosts}
+                      currency={overview.currency}
+                      size="md"
+                    />
+                  }
+                  hint={
+                    overview.financeDataAvailable
+                      ? 'Invoice-wins cost policy'
+                      : undefined
+                  }
+                  emphasize
+                />
+                <Metric
+                  label="Cash received"
+                  value={
+                    <CurrencyValue
+                      value={overview.revenueReceived}
+                      currency={overview.currency}
+                      size="md"
+                    />
+                  }
+                  emphasize
+                />
+                <Metric
+                  label="Accounts receivable"
+                  value={
+                    <CurrencyValue
+                      value={overview.outstandingRevenue}
+                      currency={overview.currency}
+                      size="md"
+                    />
+                  }
+                  emphasize
+                />
+                <Metric
+                  label="Profit"
+                  value={
+                    <CurrencyValue
+                      value={overview.currentProfit}
+                      currency={overview.currency}
+                      size="md"
+                    />
+                  }
+                  hint="Cash received − actual costs"
+                  emphasize
+                />
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Metric
+                  label="Committed"
+                  value={
+                    <CurrencyValue
+                      value={overview.committedCosts}
+                      currency={overview.currency}
+                      size="sm"
+                    />
+                  }
+                />
+                <Metric
+                  label="Projected profit"
+                  value={
+                    <CurrencyValue
+                      value={overview.projectedProfit}
+                      currency={overview.currency}
+                      size="sm"
+                    />
+                  }
+                />
+                <Metric
+                  label="Margin"
+                  value={
+                    overview.profitMarginPercent !== null
+                      ? `${overview.profitMarginPercent.replace('.', ',')} %`
+                      : '—'
+                  }
+                />
+                <Metric
+                  label="Remaining budget"
+                  value={
+                    <CurrencyValue
+                      value={overview.remainingBudget}
+                      currency={overview.currency}
+                      size="sm"
+                    />
+                  }
+                />
+              </div>
+              {!overview.financeDataAvailable ? (
+                <p className="mt-4 text-sm text-muted">
+                  Cost and revenue figures stay at zero until invoices,
+                  payments, and expenses are recorded for this project.
+                </p>
+              ) : null}
+            </Card>
+          </div>
 
           <div className="space-y-4">
-            <Card title="Details">
+            <Card title="Project information">
               <dl className="space-y-3 text-sm">
                 <div>
-                  <dt className="text-[var(--color-muted)]">Kunde</dt>
-                  <dd className="font-medium">
+                  <dt className="text-caption">Customer</dt>
+                  <dd className="font-medium text-ink">
                     {project.customer.companyName}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[var(--color-muted)]">Kundenkontakt</dt>
-                  <dd>{project.customerContact ?? '—'}</dd>
+                  <dt className="text-caption">Customer contact</dt>
+                  <dd className="text-ink">{project.customerContact ?? '—'}</dd>
                 </div>
                 <div>
-                  <dt className="text-[var(--color-muted)]">Baustelle</dt>
-                  <dd>{site || '—'}</dd>
+                  <dt className="text-caption">Site</dt>
+                  <dd className="text-ink">{site || '—'}</dd>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <dt className="text-caption">Start</dt>
+                    <dd className="text-ink">
+                      {formatDateDe(project.startDate)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption">Expected end</dt>
+                    <dd className="text-ink">
+                      {formatDateDe(project.expectedCompletionDate)}
+                    </dd>
+                  </div>
                 </div>
                 <div>
-                  <dt className="text-[var(--color-muted)]">Start</dt>
-                  <dd>{formatDateDe(project.startDate)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--color-muted)]">
-                    Voraussichtliches Ende
-                  </dt>
-                  <dd>{formatDateDe(project.expectedCompletionDate)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--color-muted)]">Initialbudget</dt>
-                  <dd>
+                  <dt className="text-caption">Initial budget</dt>
+                  <dd className="text-ink">
                     {formatCurrency(project.initialBudget, project.currency)}
                   </dd>
                 </div>
               </dl>
             </Card>
             {project.description ? (
-              <Card title="Beschreibung">
-                <p className="text-sm whitespace-pre-wrap text-slate-700">
+              <Card title="Description">
+                <p className="text-sm whitespace-pre-wrap text-muted">
                   {project.description}
                 </p>
               </Card>

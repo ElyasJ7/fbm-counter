@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -10,11 +9,12 @@ import {
   Query,
 } from '@nestjs/common';
 import { ExpenseStatus } from '@prisma/client';
-import { roleHasPermission, type AuthUserDto } from '@fbm/shared';
+import type { AuthUserDto } from '@fbm/shared';
 import { RequirePermissions } from '../../common/decorators/auth.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
+import { RecordExpensePaymentDto } from './dto/record-expense-payment.dto';
 import { ExpensesService } from './expenses.service';
 
 @Controller('expenses')
@@ -61,14 +61,20 @@ export class ExpensesController {
     return this.expensesService.update(id, dto, user.id);
   }
 
+  @Post(':id/payments')
+  @RequirePermissions('finances:write')
+  recordPayment(
+    @Param('id') id: string,
+    @Body() dto: RecordExpensePaymentDto,
+    @CurrentUser() user: AuthUserDto,
+  ) {
+    return this.expensesService.recordPayment(id, dto, user.id);
+  }
+
+  /** Approval is a distinct financial control — not covered by expenses:write. */
   @Patch(':id/approve')
+  @RequirePermissions('finances:approve')
   approve(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    const canApprove =
-      roleHasPermission(user.role, 'finances:approve') ||
-      roleHasPermission(user.role, 'expenses:write');
-    if (!canApprove) {
-      throw new ForbiddenException('Insufficient permissions');
-    }
     return this.expensesService.approve(id, user.id);
   }
 

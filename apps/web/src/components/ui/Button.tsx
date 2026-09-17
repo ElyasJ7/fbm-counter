@@ -1,8 +1,10 @@
+import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
 };
 
 export function Button({
@@ -10,23 +12,38 @@ export function Button({
   variant = 'primary',
   size = 'md',
   type = 'button',
+  loading = false,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
     <button
       type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-50',
-        size === 'sm' && 'h-8 px-3 text-sm',
+        'inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-offset-2',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        size === 'sm' && 'h-8 px-3 text-xs',
         size === 'md' && 'h-10 px-4 text-sm',
-        variant === 'primary' && 'bg-[var(--color-brand)] text-white hover:bg-[#0c3d4a]',
+        size === 'lg' && 'h-11 px-5 text-sm',
+        variant === 'primary' &&
+          'bg-brand text-white shadow-[var(--shadow-xs)] hover:bg-brand-hover',
         variant === 'secondary' &&
-          'border border-[var(--color-border)] bg-white text-[var(--color-ink)] hover:bg-slate-50',
-        variant === 'ghost' && 'text-[var(--color-ink)] hover:bg-slate-100',
-        variant === 'danger' && 'bg-[var(--color-danger)] text-white hover:bg-red-800',
+          'border border-border bg-panel text-ink hover:bg-background',
+        variant === 'ghost' && 'text-ink hover:bg-brand-soft/60',
+        variant === 'danger' &&
+          'bg-danger text-white shadow-[var(--shadow-xs)] hover:bg-[#991b1b]',
         className,
       )}
       {...props}
-    />
+    >
+      {loading ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+      ) : null}
+      {children}
+    </button>
   );
 }

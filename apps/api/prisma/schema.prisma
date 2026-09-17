@@ -169,11 +169,15 @@ model Notification {
   message   String
   type      String
   link      String?
+  /** Idempotency key for unread event notifications (e.g. invoice.overdue:<id>). */
+  dedupeKey String?
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
+  @@unique([userId, dedupeKey])
   @@index([userId, readAt])
   @@index([createdAt])
+  @@index([type, dedupeKey])
   @@map("notifications")
 }
 
@@ -475,7 +479,7 @@ model Document {
   id               String           @id @default(cuid())
   title            String?
   originalFileName String
-  storageKey       String           @unique
+  storageKey       String?          @unique
   mimeType         String
   sizeBytes        Int
   category         DocumentCategory @default(OTHER)
@@ -487,11 +491,22 @@ model Document {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   deletedAt        DateTime?
+  purgedAt         DateTime?
 
   @@index([projectId])
   @@index([uploadedById])
   @@index([category])
   @@index([deletedAt])
   @@index([createdAt])
+  @@index([deletedAt, purgedAt])
   @@map("documents")
+}
+
+/// Atomic counters for business document numbers (invoice, payment, …).
+model NumberSequence {
+  key       String   @id
+  nextValue Int
+  updatedAt DateTime @updatedAt
+
+  @@map("number_sequences")
 }

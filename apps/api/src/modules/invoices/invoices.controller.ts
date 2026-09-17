@@ -9,6 +9,7 @@ import {
   Query,
   StreamableFile,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
 import type { AuthUserDto } from '@fbm/shared';
 import { RequirePermissions } from '../../common/decorators/auth.decorators';
@@ -42,6 +43,7 @@ export class InvoicesController {
   }
 
   @Get(':id/pdf')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @RequirePermissions('invoices:read')
   async downloadPdf(@Param('id') id: string) {
     const file = await this.invoicesService.renderPdf(id);

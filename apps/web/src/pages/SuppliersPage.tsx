@@ -2,15 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { roleHasPermission } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency } from '../lib/format';
 import {
   createSupplier,
   deleteSupplier,
@@ -85,16 +94,16 @@ export function SuppliersPage() {
     },
   });
 
-  const title = useMemo(() => 'Neuer Lieferant', []);
+  const title = useMemo(() => 'New supplier', []);
   const hasTotals = Boolean(
     query.data?.data.some((supplier) => supplier.totals),
   );
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Lieferanten"
-        description="Stammdaten für Lieferanten und Einkauf."
+        title="Suppliers"
+        description="Material and service suppliers."
         actions={
           canWrite ? (
             <Button
@@ -104,27 +113,27 @@ export function SuppliersPage() {
                 setFormError(null);
               }}
             >
-              Neuer Lieferant
+              New supplier
             </Button>
           ) : null
         }
       />
 
-      <div className="mb-4">
+      <FilterBar>
         <Input
-          label="Suche"
+          label="Search"
           name="search"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             setPage(1);
           }}
-          placeholder="Firma, Kontakt, Stadt…"
+          placeholder="Company, contact, city…"
         />
-      </div>
+      </FilterBar>
 
       {showForm && canWrite ? (
-        <Card className="mb-6" title={title}>
+        <Card title={title}>
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -217,9 +226,9 @@ export function SuppliersPage() {
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -244,21 +253,18 @@ export function SuppliersPage() {
       ) : null}
 
       {query.error ? (
-        <EmptyState
-          title="Lieferanten konnten nicht geladen werden"
-          description={
-            query.error instanceof ApiError
-              ? query.error.message
-              : 'Unerwarteter Fehler'
-          }
-        />
+        <Alert tone="danger" title="Could not load suppliers">
+          {query.error instanceof ApiError
+            ? query.error.message
+            : 'Unexpected error'}
+        </Alert>
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
         <EmptyState
-          title="Noch keine Lieferanten"
-          description="Legen Sie einen Lieferanten an, um Ausgaben und Eingangsrechnungen zuzuordnen."
-          actionLabel={canWrite ? 'Neuer Lieferant' : undefined}
+          title="No suppliers yet"
+          description="Add a supplier to assign expenses and inbound invoices."
+          actionLabel={canWrite ? 'New supplier' : undefined}
           onAction={
             canWrite
               ? () => {
@@ -271,125 +277,143 @@ export function SuppliersPage() {
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Firma</th>
-                  <th className="px-3 py-2 font-medium">Kontakt</th>
-                  <th className="px-3 py-2 font-medium">Stadt</th>
-                  <th className="px-3 py-2 font-medium">E-Mail</th>
+        <DataTable
+          footer={
+            <>
+              <span>
+                Page {query.data.meta.page} of {query.data.meta.totalPages} (
+                {query.data.meta.total} total)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= query.data.meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Company</th>
+                <th className={dataTableThClassName()}>Contact</th>
+                <th className={dataTableThClassName()}>City</th>
+                <th className={dataTableThClassName()}>Email</th>
+                {hasTotals ? (
+                  <>
+                    <th className={dataTableThClassName('right')}>Purchases</th>
+                    <th className={dataTableThClassName('right')}>Paid</th>
+                    <th className={dataTableThClassName('right')}>Open</th>
+                  </>
+                ) : null}
+                <th className={dataTableThClassName()}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.data.map((supplier) => (
+                <tr key={supplier.id} className={dataTableRowClassName()}>
+                  <td className={`${dataTableTdClassName()} font-medium`}>
+                    <Link
+                      className="text-brand hover:underline"
+                      to={`/suppliers/${supplier.id}`}
+                    >
+                      {supplier.companyName}
+                    </Link>
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {supplier.contactPerson ?? '—'}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {supplier.city ?? '—'}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {supplier.email ?? '—'}
+                  </td>
                   {hasTotals ? (
                     <>
-                      <th className="px-3 py-2 font-medium">Einkäufe</th>
-                      <th className="px-3 py-2 font-medium">Bezahlt</th>
-                      <th className="px-3 py-2 font-medium">Offen</th>
+                      <td className={dataTableTdClassName('right')}>
+                        {supplier.totals ? (
+                          <CurrencyValue
+                            value={supplier.totals.totalPurchases}
+                            size="sm"
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className={dataTableTdClassName('right')}>
+                        {supplier.totals ? (
+                          <CurrencyValue
+                            value={supplier.totals.paidAmount}
+                            size="sm"
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className={dataTableTdClassName('right')}>
+                        {supplier.totals ? (
+                          <CurrencyValue
+                            value={supplier.totals.outstandingBalance}
+                            size="sm"
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                     </>
                   ) : null}
-                  <th className="px-3 py-2 font-medium">Aktionen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((supplier) => (
-                  <tr key={supplier.id} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium">
+                  <td className={dataTableTdClassName()}>
+                    <div className="flex flex-wrap gap-2">
                       <Link
-                        className="text-[var(--color-brand)] hover:underline"
+                        className="text-brand hover:underline"
                         to={`/suppliers/${supplier.id}`}
                       >
-                        {supplier.companyName}
+                        Details
                       </Link>
-                    </td>
-                    <td className="px-3 py-3">
-                      {supplier.contactPerson ?? '—'}
-                    </td>
-                    <td className="px-3 py-3">{supplier.city ?? '—'}</td>
-                    <td className="px-3 py-3">{supplier.email ?? '—'}</td>
-                    {hasTotals ? (
-                      <>
-                        <td className="px-3 py-3">
-                          {supplier.totals
-                            ? formatCurrency(supplier.totals.totalPurchases)
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-3">
-                          {supplier.totals
-                            ? formatCurrency(supplier.totals.paidAmount)
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-3">
-                          {supplier.totals
-                            ? formatCurrency(
-                                supplier.totals.outstandingBalance,
+                      <Link
+                        className="text-brand hover:underline"
+                        to={`/expenses?search=${encodeURIComponent(supplier.companyName)}`}
+                      >
+                        Expenses
+                      </Link>
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className="text-danger hover:underline"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete supplier “${supplier.companyName}”?`,
                               )
-                            : '—'}
-                        </td>
-                      </>
-                    ) : null}
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          className="text-[var(--color-brand)] hover:underline"
-                          to={`/suppliers/${supplier.id}`}
+                            ) {
+                              deleteMutation.mutate(supplier.id);
+                            }
+                          }}
                         >
-                          Details
-                        </Link>
-                        <Link
-                          className="text-[var(--color-brand)] hover:underline"
-                          to={`/expenses?search=${encodeURIComponent(supplier.companyName)}`}
-                        >
-                          Ausgaben
-                        </Link>
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            className="text-[var(--color-danger)] hover:underline"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Lieferant „${supplier.companyName}“ löschen?`,
-                                )
-                              ) {
-                                deleteMutation.mutate(supplier.id);
-                              }
-                            }}
-                          >
-                            Löschen
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-            <span>
-              Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-              {query.data.meta.total} gesamt)
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Zurück
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= query.data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Weiter
-              </Button>
-            </div>
-          </div>
-        </Card>
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </div>
   );

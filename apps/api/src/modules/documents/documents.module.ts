@@ -8,6 +8,6 @@ import { StorageService } from './storage.service';
   imports: [NotificationsModule],
   controllers: [DocumentsController],
   providers: [DocumentsService, StorageService],
-  exports: [DocumentsService],
+  exports: [DocumentsService, StorageService],
 })
 export class DocumentsModule {}

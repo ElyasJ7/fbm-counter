@@ -5,6 +5,14 @@ on:
     branches: [main, master]
   pull_request:
 
+env:
+  DATABASE_URL: postgresql://fbm_ci:fbm_ci_password@localhost:5432/fbm_counter_ci?schema=public
+  JWT_ACCESS_SECRET: ci-access-secret-min-32-characters-long!!
+  JWT_REFRESH_SECRET: ci-refresh-secret-min-32-characters-long!
+  NODE_ENV: test
+  COOKIE_SECURE: 'false'
+  ALLOW_SEED: 'true'
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -12,13 +20,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: fbm
-          POSTGRES_PASSWORD: fbm_dev_password
-          POSTGRES_DB: fbm_counter
+          POSTGRES_USER: fbm_ci
+          POSTGRES_PASSWORD: fbm_ci_password
+          POSTGRES_DB: fbm_counter_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U fbm -d fbm_counter"
+          --health-cmd "pg_isready -U fbm_ci -d fbm_counter_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -41,22 +49,37 @@ jobs:
       - name: Build packages
         run: pnpm build:packages
 
-      - name: Generate Prisma client
+      - name: Prisma generate
         run: pnpm db:generate
-        env:
-          DATABASE_URL: postgresql://fbm:fbm_dev_password@localhost:5432/fbm_counter?schema=public
+
+      - name: Prisma migrate deploy
+        run: pnpm --filter @fbm/api exec prisma migrate deploy
+
+      - name: Seed CI fixtures
+        run: pnpm --filter @fbm/api prisma:seed
+
+      - name: Typecheck
+        run: |
+          pnpm --filter @fbm/shared exec tsc --noEmit
+          pnpm --filter @fbm/financial-core exec tsc --noEmit
+          pnpm --filter @fbm/api exec tsc --noEmit -p tsconfig.build.json
+          pnpm --filter @fbm/web exec tsc --noEmit
+
+      - name: Lint (API — report only; do not hide failures)
+        continue-on-error: true
+        run: pnpm --filter @fbm/api lint
 
       - name: Unit tests
         run: |
           pnpm --filter @fbm/financial-core test
           pnpm --filter @fbm/shared test
           pnpm --filter @fbm/api test
+          pnpm --filter @fbm/web test
 
-      - name: API e2e smoke
+      - name: API e2e (login, /auth/me, viewer deny, approve deny)
         run: pnpm --filter @fbm/api test:e2e
 
-      - name: Typecheck / build
+      - name: Build API + web
         run: pnpm build
         env:
-          DATABASE_URL: postgresql://fbm:fbm_dev_password@localhost:5432/fbm_counter?schema=public
           VITE_API_URL: http://localhost:3001/api

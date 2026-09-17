@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  applyPaymentToExpense,
   applyPaymentToInvoice,
+  assertValidExpensePaidAmount,
   calculateGrossAmount,
   calculateTaxAmount,
   computeBudgetLine,
@@ -98,6 +100,35 @@ describe('invoice payments', () => {
 
   it('computes remaining balance', () => {
     assert.equal(remainingBalance('100', '40').toFixed(2), '60.00');
+  });
+});
+
+describe('expense payments', () => {
+  it('rejects negative and over-gross paid amounts', () => {
+    assert.throws(() => assertValidExpensePaidAmount('-1', '100'));
+    assert.throws(() => assertValidExpensePaidAmount('150', '100'));
+    assert.doesNotThrow(() => assertValidExpensePaidAmount('50', '100'));
+  });
+
+  it('applies expense payments without exceeding balance', () => {
+    const first = applyPaymentToExpense({
+      grossAmount: '119',
+      paidAmount: '0',
+      paymentAmount: '50',
+      currentStatus: 'APPROVED',
+      dueDate: '2099-01-01',
+    });
+    assert.equal(first.newPaidAmount, '50.0000');
+    assert.equal(first.status, 'PARTIALLY_PAID');
+    assert.throws(() =>
+      applyPaymentToExpense({
+        grossAmount: '119',
+        paidAmount: first.newPaidAmount,
+        paymentAmount: '100',
+        currentStatus: 'PARTIALLY_PAID',
+        dueDate: '2099-01-01',
+      }),
+    );
   });
 });
 

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonCard } from '../components/ui/Skeleton';
 import { ApiError } from '../lib/api';
 import { cn } from '../lib/cn';
 import { formatDateDe } from '../lib/format';
@@ -42,10 +43,10 @@ export function NotificationsPage() {
   });
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Benachrichtigungen"
-        description="Freigaben, überfällige Rechnungen und Dokument-Uploads."
+        title="Notifications"
+        description="Alerts and system messages."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -55,53 +56,52 @@ export function NotificationsPage() {
                 setPage(1);
               }}
             >
-              {unreadOnly ? 'Nur ungelesen' : 'Alle'}
+              {unreadOnly ? 'Unread only' : 'All'}
             </Button>
             <Button
               variant="secondary"
               disabled={markAllMutation.isPending}
               onClick={() => markAllMutation.mutate()}
             >
-              Alle als gelesen
+              Mark all read
             </Button>
           </div>
         }
       />
 
       {query.isLoading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-8 w-8" />
+        <div className="grid gap-3">
+          <SkeletonCard className="h-24" />
+          <SkeletonCard className="h-24" />
+          <SkeletonCard className="h-24" />
         </div>
       ) : null}
 
       {query.error ? (
-        <EmptyState
-          title="Benachrichtigungen konnten nicht geladen werden"
-          description={
-            query.error instanceof ApiError
-              ? query.error.message
-              : 'Unerwarteter Fehler'
-          }
-        />
+        <Alert tone="danger" title="Could not load notifications">
+          {query.error instanceof ApiError
+            ? query.error.message
+            : 'Unexpected error'}
+        </Alert>
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
         <EmptyState
-          title="Keine Benachrichtigungen"
-          description="Neue Ereignisse erscheinen hier automatisch."
+          title="No notifications"
+          description="New events will appear here automatically."
         />
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <ul className="divide-y divide-[var(--color-border)]">
+        <Card padding="none">
+          <ul className="divide-y divide-border">
             {query.data.data.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
                   className={cn(
-                    'flex w-full flex-col gap-1 px-3 py-4 text-left hover:bg-slate-50',
-                    !item.readAt && 'bg-[var(--color-brand-soft)]/30',
+                    'flex w-full flex-col gap-1 px-4 py-4 text-left transition hover:bg-background/80',
+                    !item.readAt && 'bg-brand-soft/30',
                   )}
                   onClick={() => {
                     if (!item.readAt) markReadMutation.mutate(item.id);
@@ -109,34 +109,30 @@ export function NotificationsPage() {
                   }}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-[var(--color-ink)]">
-                      {item.title}
-                    </p>
-                    <span className="text-xs text-[var(--color-muted)]">
+                    <p className="font-medium text-ink">{item.title}</p>
+                    <span className="text-xs text-muted">
                       {formatDateDe(item.createdAt)}
                     </span>
                   </div>
-                  <p className="text-sm text-[var(--color-muted)]">
-                    {item.message}
-                  </p>
-                  <p className="text-xs text-[var(--color-muted)]">{item.type}</p>
+                  <p className="text-sm text-muted">{item.message}</p>
+                  <p className="text-xs text-muted">{item.type}</p>
                 </button>
               </li>
             ))}
           </ul>
 
           {query.data.meta.totalPages > 1 ? (
-            <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
               <Button
                 variant="secondary"
                 size="sm"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                Zurück
+                Previous
               </Button>
-              <span className="text-sm text-[var(--color-muted)]">
-                Seite {query.data.meta.page} von {query.data.meta.totalPages}
+              <span className="text-sm text-muted">
+                Page {query.data.meta.page} of {query.data.meta.totalPages}
               </span>
               <Button
                 variant="secondary"
@@ -144,7 +140,7 @@ export function NotificationsPage() {
                 disabled={page >= query.data.meta.totalPages}
                 onClick={() => setPage((p) => p + 1)}
               >
-                Weiter
+                Next
               </Button>
             </div>
           ) : null}

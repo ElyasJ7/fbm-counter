@@ -7,12 +7,16 @@ import {
   roleHasPermission,
   type ProjectStatus,
 } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { ErrorState } from '../components/ui/ErrorState';
+import { FormSection } from '../components/ui/FormSection';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
+import { Textarea } from '../components/ui/Textarea';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
 import { toDateInputValue } from '../lib/format';
@@ -140,28 +144,48 @@ export function ProjectFormPage() {
 
   if (!canWrite) {
     return (
-      <div>
-        <PageHeader title="Projects" description="You cannot edit projects." />
-        <Link to="/projects" className="text-[var(--color-brand)]">
-          Back to projects
-        </Link>
-      </div>
+      <ErrorState
+        title="Access denied"
+        description="You do not have permission to create or edit projects."
+        actionLabel="Back to projects"
+        actionTo="/projects"
+      />
     );
   }
 
   if (isEdit && projectQuery.isLoading) {
     return (
-      <div className="flex justify-center py-16">
+      <div className="flex justify-center py-16" role="status" aria-live="polite">
         <Spinner className="h-8 w-8" />
+        <span className="sr-only">Loading project</span>
       </div>
     );
   }
 
+  if (isEdit && (projectQuery.error || !projectQuery.data)) {
+    return (
+      <ErrorState
+        title="Project not found"
+        description={
+          projectQuery.error instanceof ApiError
+            ? projectQuery.error.message
+            : 'The requested project could not be loaded.'
+        }
+        actionLabel="Back to projects"
+        actionTo="/projects"
+      />
+    );
+  }
+
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={isEdit ? 'Edit project' : 'New project'}
         description="Contract value and budgets are stored as decimal amounts in EUR."
+        breadcrumbs={[
+          { label: 'Projects', to: '/projects' },
+          { label: isEdit ? 'Edit' : 'New' },
+        ]}
         actions={
           <Link to={isEdit && id ? `/projects/${id}` : '/projects'}>
             <Button variant="secondary">Cancel</Button>
@@ -169,102 +193,147 @@ export function ProjectFormPage() {
         }
       />
 
-      <Card>
+      <Card padding="lg">
         <form
-          className="grid gap-3 md:grid-cols-2"
+          className="space-y-8"
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
             saveMutation.mutate();
           }}
+          noValidate
         >
-          <Input
-            label="Project number"
-            name="projectNumber"
-            required
-            value={form.projectNumber}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, projectNumber: e.target.value }))
-            }
-          />
-          <Input
-            label="Project name"
-            name="name"
-            required
-            value={form.name}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, name: e.target.value }))
-            }
-          />
-          <Select
-            label="Customer"
-            name="customerId"
-            required
-            value={form.customerId}
-            placeholder="Select customer"
-            options={
-              customersQuery.data?.data.map((c) => ({
-                value: c.id,
-                label: c.companyName,
-              })) ?? []
-            }
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, customerId: e.target.value }))
-            }
-          />
-          <Select
-            label="Project manager"
-            name="projectManagerId"
-            value={form.projectManagerId ?? ''}
-            placeholder="Unassigned"
-            options={
-              managersQuery.data?.map((m) => ({
-                value: m.id,
-                label: `${m.firstName} ${m.lastName} (${m.role})`,
-              })) ?? []
-            }
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                projectManagerId: e.target.value,
-              }))
-            }
-          />
-          <Select
-            label="Status"
-            name="status"
-            value={form.status ?? 'PLANNING'}
-            options={PROJECT_STATUSES.map((value) => ({
-              value,
-              label: PROJECT_STATUS_LABELS[value],
-            }))}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                status: e.target.value as ProjectStatus,
-              }))
-            }
-          />
-          <Input
-            label="Customer contact"
-            name="customerContact"
-            value={form.customerContact ?? ''}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                customerContact: e.target.value,
-              }))
-            }
-          />
-          <Input
-            label="Site street"
-            name="siteStreet"
-            value={form.siteStreet ?? ''}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, siteStreet: e.target.value }))
-            }
-          />
-          <div className="grid grid-cols-2 gap-3">
+          {error ? (
+            <Alert tone="danger" title="Could not save project">
+              {error}
+            </Alert>
+          ) : null}
+
+          <FormSection title="General information">
+            <Input
+              label="Project number"
+              name="projectNumber"
+              required
+              value={form.projectNumber}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, projectNumber: e.target.value }))
+              }
+            />
+            <Input
+              label="Project name"
+              name="name"
+              required
+              value={form.name}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+            <Select
+              label="Status"
+              name="status"
+              value={form.status ?? 'PLANNING'}
+              options={PROJECT_STATUSES.map((value) => ({
+                value,
+                label: PROJECT_STATUS_LABELS[value],
+              }))}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  status: e.target.value as ProjectStatus,
+                }))
+              }
+            />
+            <Input
+              label="Progress (%)"
+              name="progressPercent"
+              type="number"
+              min={0}
+              max={100}
+              value={String(form.progressPercent ?? 0)}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  progressPercent: Number(e.target.value),
+                }))
+              }
+            />
+            <div className="md:col-span-2">
+              <Textarea
+                label="Description"
+                name="description"
+                value={form.description ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+              />
+            </div>
+          </FormSection>
+
+          <FormSection title="Customer & manager">
+            <Select
+              label="Customer"
+              name="customerId"
+              required
+              value={form.customerId}
+              placeholder="Select customer"
+              options={
+                customersQuery.data?.data.map((c) => ({
+                  value: c.id,
+                  label: c.companyName,
+                })) ?? []
+              }
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, customerId: e.target.value }))
+              }
+            />
+            <Select
+              label="Project manager"
+              name="projectManagerId"
+              value={form.projectManagerId ?? ''}
+              placeholder="Unassigned"
+              options={
+                managersQuery.data?.map((m) => ({
+                  value: m.id,
+                  label: `${m.firstName} ${m.lastName} (${m.role})`,
+                })) ?? []
+              }
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  projectManagerId: e.target.value,
+                }))
+              }
+            />
+            <Input
+              label="Customer contact"
+              name="customerContact"
+              value={form.customerContact ?? ''}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  customerContact: e.target.value,
+                }))
+              }
+            />
+          </FormSection>
+
+          <FormSection title="Location">
+            <Input
+              label="Site street"
+              name="siteStreet"
+              value={form.siteStreet ?? ''}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, siteStreet: e.target.value }))
+              }
+            />
+            <Input
+              label="Country"
+              name="siteCountry"
+              value={form.siteCountry}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, siteCountry: e.target.value }))
+              }
+            />
             <Input
               label="Postal code"
               name="sitePostalCode"
@@ -284,85 +353,104 @@ export function ProjectFormPage() {
                 setForm((prev) => ({ ...prev, siteCity: e.target.value }))
               }
             />
-          </div>
-          <Input
-            label="Start date"
-            name="startDate"
-            type="date"
-            value={form.startDate ?? ''}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, startDate: e.target.value }))
-            }
-          />
-          <Input
-            label="Expected completion"
-            name="expectedCompletionDate"
-            type="date"
-            value={form.expectedCompletionDate ?? ''}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                expectedCompletionDate: e.target.value,
-              }))
-            }
-          />
-          <Input
-            label="Contract value (EUR)"
-            name="contractValue"
-            required
-            value={form.contractValue}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, contractValue: e.target.value }))
-            }
-          />
-          <Input
-            label="Initial budget (EUR)"
-            name="initialBudget"
-            required
-            value={form.initialBudget}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, initialBudget: e.target.value }))
-            }
-          />
-          <Input
-            label="Current budget (EUR)"
-            name="currentBudget"
-            value={form.currentBudget ?? ''}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, currentBudget: e.target.value }))
-            }
-          />
-          <Input
-            label="Progress (%)"
-            name="progressPercent"
-            type="number"
-            min={0}
-            max={100}
-            value={String(form.progressPercent ?? 0)}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                progressPercent: Number(e.target.value),
-              }))
-            }
-          />
-          <label className="md:col-span-2 flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Description</span>
-            <textarea
-              className="min-h-24 rounded-md border border-[var(--color-border)] px-3 py-2"
-              value={form.description ?? ''}
+          </FormSection>
+
+          <FormSection title="Timeline">
+            <Input
+              label="Start date"
+              name="startDate"
+              type="date"
+              value={form.startDate ?? ''}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, description: e.target.value }))
+                setForm((prev) => ({ ...prev, startDate: e.target.value }))
               }
             />
-          </label>
-          {error ? (
-            <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
-              {error}
-            </p>
-          ) : null}
-          <div className="md:col-span-2">
-            <Button type="submit" disabled={saveMutation.isPending}>
+            <Input
+              label="Expected completion"
+              name="expectedCompletionDate"
+              type="date"
+              value={form.expectedCompletionDate ?? ''}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  expectedCompletionDate: e.target.value,
+                }))
+              }
+            />
+            <Input
+              label="Actual completion"
+              name="actualCompletionDate"
+              type="date"
+              value={form.actualCompletionDate ?? ''}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  actualCompletionDate: e.target.value,
+                }))
+              }
+            />
+          </FormSection>
+
+          <FormSection
+            title="Financial information"
+            description="Amounts are stored as decimal strings in EUR."
+          >
+            <Input
+              label="Contract value (EUR)"
+              name="contractValue"
+              required
+              inputMode="decimal"
+              value={form.contractValue}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, contractValue: e.target.value }))
+              }
+            />
+            <Input
+              label="Initial budget (EUR)"
+              name="initialBudget"
+              required
+              inputMode="decimal"
+              value={form.initialBudget}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, initialBudget: e.target.value }))
+              }
+            />
+            <Input
+              label="Current budget (EUR)"
+              name="currentBudget"
+              inputMode="decimal"
+              value={form.currentBudget ?? ''}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, currentBudget: e.target.value }))
+              }
+            />
+          </FormSection>
+
+          <FormSection title="Additional information" columns={1}>
+            <Textarea
+              label="Notes"
+              name="notes"
+              value={form.notes ?? ''}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, notes: e.target.value }))
+              }
+            />
+          </FormSection>
+
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+            <Link
+              to={isEdit && id ? `/projects/${id}` : '/projects'}
+              className="sm:order-none"
+            >
+              <Button type="button" variant="secondary" className="w-full sm:w-auto">
+                Cancel
+              </Button>
+            </Link>
+            <Button
+              type="submit"
+              disabled={saveMutation.isPending}
+              className="w-full sm:w-auto"
+            >
               {saveMutation.isPending ? 'Saving…' : 'Save project'}
             </Button>
           </div>

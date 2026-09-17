@@ -14,27 +14,29 @@ describe('invoice party validation', () => {
 
   it('rejects missing customer', async () => {
     await expect(
-      assertCustomerInvoiceParty(InvoiceType.CUSTOMER, 'c1', async () => null),
+      assertCustomerInvoiceParty(InvoiceType.CUSTOMER, 'c1', () =>
+        Promise.resolve(null),
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('accepts existing customer', async () => {
     await expect(
-      assertCustomerInvoiceParty(InvoiceType.CUSTOMER, 'c1', async () => ({
-        id: 'c1',
-      })),
+      assertCustomerInvoiceParty(InvoiceType.CUSTOMER, 'c1', () =>
+        Promise.resolve({ id: 'c1' }),
+      ),
     ).resolves.toBeUndefined();
   });
 
-  it('requires supplier or subcontractor for SUPPLIER invoices', async () => {
-    await expect(
+  it('requires supplier or subcontractor for SUPPLIER invoices', () => {
+    expect(() =>
       assertSupplierInvoiceParty(InvoiceType.SUPPLIER, null, null),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).toThrow(BadRequestException);
   });
 
-  it('accepts supplierId for SUPPLIER invoices', async () => {
-    await expect(
+  it('accepts supplierId for SUPPLIER invoices', () => {
+    expect(() =>
       assertSupplierInvoiceParty(InvoiceType.SUPPLIER, 's1', null),
-    ).resolves.toBeUndefined();
+    ).not.toThrow();
   });
 });

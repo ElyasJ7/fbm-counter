@@ -22,12 +22,24 @@ import {
   YAxis,
 } from 'recharts';
 import { ProjectStatusBadge } from '../components/projects/ProjectStatusBadge';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonCard } from '../components/ui/Skeleton';
+import { StatCard } from '../components/ui/StatCard';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError, apiDownload } from '../lib/api';
 import { formatCurrency } from '../lib/format';
@@ -44,6 +56,9 @@ const CHART_COLORS = [
   '#0f766e',
 ];
 
+const CHART_GRID = '#e2e8f0';
+const CHART_TICK = { fontSize: 11, fill: '#64748b' };
+
 function toNumber(value: string) {
   return Number(value);
 }
@@ -57,26 +72,24 @@ function formatMonthLabel(month: string) {
   }).format(date);
 }
 
-function KpiCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-semibold text-[var(--color-ink)]">{value}</p>
-      {hint ? (
-        <p className="mt-1 text-xs text-[var(--color-muted)]">{hint}</p>
-      ) : null}
-    </div>
-  );
+function moneyTick(value: number) {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (abs >= 1_000) {
+    return `${(value / 1_000).toFixed(0)}k`;
+  }
+  return String(value);
+}
+
+function chartTooltipStyle() {
+  return {
+    borderRadius: 8,
+    border: '1px solid #e2e8f0',
+    boxShadow: '0 1px 2px rgb(15 23 42 / 0.05)',
+    fontSize: 12,
+  };
 }
 
 async function downloadReport(
@@ -180,26 +193,41 @@ export function ReportsPage() {
 
   if (query.isLoading) {
     return (
-      <div className="flex justify-center py-24">
-        <Spinner className="h-8 w-8" />
+      <div className="space-y-6">
+        <div>
+          <div className="mb-2 h-7 w-40 animate-pulse rounded bg-border/70" />
+          <div className="h-4 w-72 animate-pulse rounded bg-border/50" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <SkeletonCard className="h-80" />
+          <SkeletonCard className="h-80" />
+        </div>
+        <SkeletonCard className="h-64" />
       </div>
     );
   }
 
   if (query.error) {
     return (
-      <div>
+      <div className="space-y-4">
         <PageHeader
-          title="Berichte"
-          description="Rentabilität, Cashflow und Exporte."
+          title="Reports"
+          description="Profitability, cash flow, and exports."
         />
-        <EmptyState
-          title="Berichte konnten nicht geladen werden"
+        <ErrorState
+          title="Could not load reports"
           description={
             query.error instanceof ApiError
               ? query.error.message
-              : 'Unerwarteter Fehler'
+              : 'Unexpected error. Try refreshing the page.'
           }
+          actionLabel="Retry"
+          onAction={() => void query.refetch()}
         />
       </div>
     );
@@ -209,10 +237,10 @@ export function ReportsPage() {
   const { kpis, currency, period, projectProfitability } = data;
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="Berichte"
-        description="Unternehmensweite Rentabilität, Cashflow und Exporte."
+        title="Reports"
+        description="Profitability, cash flow, and exports."
         actions={
           canExport ? (
             <div className="flex flex-wrap gap-2">
@@ -221,27 +249,29 @@ export function ReportsPage() {
                 disabled={exporting !== null}
                 onClick={() => void onExport('summary', 'csv')}
               >
-                {exporting === 'csv-summary' ? 'Export…' : 'CSV Gesamt'}
+                {exporting === 'csv-summary' ? 'Exporting…' : 'CSV Summary'}
               </Button>
               <Button
                 variant="secondary"
                 disabled={exporting !== null}
                 onClick={() => void onExport('profitability', 'csv')}
               >
-                {exporting === 'csv-profitability' ? 'Export…' : 'CSV Projekte'}
+                {exporting === 'csv-profitability'
+                  ? 'Exporting…'
+                  : 'CSV Projects'}
               </Button>
               <Button
                 variant="secondary"
                 disabled={exporting !== null}
                 onClick={() => void onExport('cashflow', 'csv')}
               >
-                {exporting === 'csv-cashflow' ? 'Export…' : 'CSV Cashflow'}
+                {exporting === 'csv-cashflow' ? 'Exporting…' : 'CSV Cash flow'}
               </Button>
               <Button
                 disabled={exporting !== null}
                 onClick={() => void onExport('summary', 'pdf')}
               >
-                {exporting === 'pdf-summary' ? 'Export…' : 'PDF Bericht'}
+                {exporting === 'pdf-summary' ? 'Exporting…' : 'PDF Report'}
               </Button>
             </div>
           ) : null
@@ -249,35 +279,35 @@ export function ReportsPage() {
       />
 
       {exportError ? (
-        <p className="mb-4 text-sm text-[var(--color-danger)]" role="alert">
+        <Alert tone="danger" title="Export failed">
           {exportError}
-        </p>
+        </Alert>
       ) : null}
 
-      <Card className="mb-6" title="Zeitraum">
-        <div className="grid gap-3 md:grid-cols-4">
+      <div>
+        <FilterBar>
           <Input
-            label="Von"
+            label="From"
             name="from"
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
           />
           <Input
-            label="Bis"
+            label="To"
             name="to"
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
           />
-          <div className="flex items-end gap-2 md:col-span-2">
+          <div className="flex items-end gap-2 sm:col-span-2">
             <Button
               onClick={() => {
                 setAppliedFrom(from);
                 setAppliedTo(to);
               }}
             >
-              Anwenden
+              Apply
             </Button>
             <Button
               variant="secondary"
@@ -288,62 +318,118 @@ export function ReportsPage() {
                 setAppliedTo('');
               }}
             >
-              Zurücksetzen
+              Reset
             </Button>
           </div>
-        </div>
-        <p className="mt-3 text-xs text-[var(--color-muted)]">
+        </FilterBar>
+        <p className="mt-2 text-xs text-muted">
           {period.from || period.to
-            ? `Aktueller Filter: ${period.from ?? '…'} – ${period.to ?? '…'}`
-            : 'Kein Datumsfilter — alle Daten / Cashflow der letzten 12 Monate.'}
+            ? `Current filter: ${period.from ?? '…'} – ${period.to ?? '…'}`
+            : 'No date filter — all data / cash flow for the last 12 months.'}
         </p>
-      </Card>
+      </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Gesamterlös"
-          value={formatCurrency(kpis.totalRevenue, currency)}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Cash received"
+          value={
+            <CurrencyValue
+              value={kpis.totalRevenue}
+              currency={currency}
+              size="lg"
+            />
+          }
         />
-        <KpiCard
-          label="Gesamtausgaben"
-          value={formatCurrency(kpis.totalExpenses, currency)}
+        <StatCard
+          label="Actual costs"
+          value={
+            <CurrencyValue
+              value={kpis.totalExpenses}
+              currency={currency}
+              size="lg"
+            />
+          }
         />
-        <KpiCard
-          label="Bruttogewinn"
-          value={formatCurrency(kpis.grossProfit, currency)}
+        <StatCard
+          label="Gross profit"
+          value={
+            <CurrencyValue
+              value={kpis.grossProfit}
+              currency={currency}
+              size="lg"
+              tone={toNumber(kpis.grossProfit) < 0 ? 'danger' : 'default'}
+            />
+          }
         />
-        <KpiCard
-          label="Verfügbare Liquidität"
-          value={formatCurrency(kpis.availableCash, currency)}
-          hint={`Offene Forderungen ${formatCurrency(kpis.outstandingCustomerInvoices, currency)}`}
+        <StatCard
+          label="Available cash"
+          value={
+            <CurrencyValue
+              value={kpis.availableCash}
+              currency={currency}
+              size="lg"
+            />
+          }
+          hint={`AR ${formatCurrency(kpis.outstandingCustomerInvoices, currency)}`}
         />
       </div>
 
-      <div className="mb-6 grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Card
-          title="Monatlicher Cashflow"
-          description="Zahlungseingänge und -ausgänge nach Monat."
+          title="Monthly cash flow"
+          description="Inflows and outflows by month."
         >
           {!hasCashActivity ? (
             <EmptyState
-              title="Keine Zahlungen"
-              description="Cashflow erscheint, sobald Zahlungen erfasst sind."
+              title="No payments"
+              description="Cash flow appears once payments are recorded."
             />
           ) : (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cashFlowData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                <BarChart
+                  data={cashFlowData}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={CHART_GRID}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="month"
+                    tick={CHART_TICK}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={CHART_TICK}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => moneyTick(Number(v))}
+                    width={48}
+                  />
                   <Tooltip
+                    contentStyle={chartTooltipStyle()}
                     formatter={(value) =>
                       formatCurrency(String(value ?? 0), currency)
                     }
                   />
-                  <Legend />
-                  <Bar dataKey="inflow" name="Eingänge" fill="#15803d" />
-                  <Bar dataKey="outflow" name="Ausgänge" fill="#be123c" />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar
+                    dataKey="inflow"
+                    name="Inflow"
+                    fill="#15803d"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={28}
+                  />
+                  <Bar
+                    dataKey="outflow"
+                    name="Outflow"
+                    fill="#be123c"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={28}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -351,13 +437,13 @@ export function ReportsPage() {
         </Card>
 
         <Card
-          title="Ausgaben nach Kategorie"
-          description="Bezahlte Ausgaben im gewählten Zeitraum."
+          title="Expenses by category"
+          description="Paid expenses in the selected period."
         >
           {categoryData.length === 0 ? (
             <EmptyState
-              title="Keine Ausgaben"
-              description="Kategorien erscheinen nach erfassten Ausgaben."
+              title="No expenses"
+              description="Categories appear after expenses are recorded."
             />
           ) : (
             <div className="h-72 w-full">
@@ -379,11 +465,12 @@ export function ReportsPage() {
                     ))}
                   </Pie>
                   <Tooltip
+                    contentStyle={chartTooltipStyle()}
                     formatter={(value) =>
                       formatCurrency(String(value ?? 0), currency)
                     }
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -392,72 +479,86 @@ export function ReportsPage() {
       </div>
 
       <Card
-        title="Projektrentabilität"
-        description="Erlös, Kosten und Gewinn je Projekt (bezahlt)."
+        title="Project profitability"
+        description="Cash received, costs, and profit per project (cash-based)."
       >
         {projectProfitability.length === 0 ? (
           <EmptyState
-            title="Keine Projekte"
-            description="Legen Sie Projekte an, um Rentabilität zu sehen."
+            title="No projects"
+            description="Create projects to see profitability."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <DataTable className="border-0 shadow-none">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+              <thead className={dataTableHeadClassName()}>
                 <tr>
-                  <th className="px-3 py-2 font-medium">Projekt</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Erlös</th>
-                  <th className="px-3 py-2 font-medium">Kosten</th>
-                  <th className="px-3 py-2 font-medium">Gewinn</th>
-                  <th className="px-3 py-2 font-medium">Marge</th>
-                  <th className="px-3 py-2 font-medium">Auftragswert</th>
+                  <th className={dataTableThClassName()}>Project</th>
+                  <th className={dataTableThClassName()}>Status</th>
+                  <th className={dataTableThClassName('right')}>Cash received</th>
+                  <th className={dataTableThClassName('right')}>Costs</th>
+                  <th className={dataTableThClassName('right')}>Profit</th>
+                  <th className={dataTableThClassName('right')}>Margin</th>
+                  <th className={dataTableThClassName('right')}>
+                    Contract value
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {projectProfitability.map((row) => (
-                  <tr
-                    key={row.projectId}
-                    className="border-b border-[var(--color-border)] last:border-0"
-                  >
-                    <td className="px-3 py-3">
+                  <tr key={row.projectId} className={dataTableRowClassName()}>
+                    <td className={dataTableTdClassName()}>
                       <Link
                         to={`/projects/${row.projectId}`}
-                        className="font-medium text-[var(--color-accent)] hover:underline"
+                        className="font-medium text-brand hover:underline"
                       >
                         {row.projectNumber}
                       </Link>
-                      <div className="text-xs text-[var(--color-muted)]">
-                        {row.name}
-                      </div>
+                      <div className="text-xs text-muted">{row.name}</div>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className={dataTableTdClassName()}>
                       <ProjectStatusBadge
                         status={row.status as ProjectStatus}
                       />
                     </td>
-                    <td className="px-3 py-3">
-                      {formatCurrency(row.revenue, currency)}
+                    <td className={dataTableTdClassName('right')}>
+                      <CurrencyValue
+                        value={row.revenue}
+                        currency={currency}
+                        size="sm"
+                      />
                     </td>
-                    <td className="px-3 py-3">
-                      {formatCurrency(row.costs, currency)}
+                    <td className={dataTableTdClassName('right')}>
+                      <CurrencyValue
+                        value={row.costs}
+                        currency={currency}
+                        size="sm"
+                      />
                     </td>
-                    <td className="px-3 py-3 font-medium">
-                      {formatCurrency(row.profit, currency)}
+                    <td className={dataTableTdClassName('right')}>
+                      <CurrencyValue
+                        value={row.profit}
+                        currency={currency}
+                        size="sm"
+                        tone={toNumber(row.profit) < 0 ? 'danger' : 'default'}
+                      />
                     </td>
-                    <td className="px-3 py-3">
+                    <td className={dataTableTdClassName('right')}>
                       {row.profitMarginPercent != null
                         ? `${row.profitMarginPercent}%`
                         : '—'}
                     </td>
-                    <td className="px-3 py-3">
-                      {formatCurrency(row.contractValue, currency)}
+                    <td className={dataTableTdClassName('right')}>
+                      <CurrencyValue
+                        value={row.contractValue}
+                        currency={currency}
+                        size="sm"
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </DataTable>
         )}
       </Card>
     </div>

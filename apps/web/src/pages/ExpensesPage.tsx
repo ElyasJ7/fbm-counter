@@ -11,16 +11,26 @@ import {
   type ExpenseStatus,
 } from '@fbm/shared';
 import { ExpenseStatusBadge } from '../components/finance/StatusBadges';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency, formatDateDe } from '../lib/format';
+import { formatDateDe } from '../lib/format';
 import {
   approveExpense,
   createExpense,
@@ -57,8 +67,7 @@ export function ExpensesPage({
     ? roleHasPermission(user.role, 'expenses:write')
     : false;
   const canApprove = user
-    ? roleHasPermission(user.role, 'finances:approve') ||
-      roleHasPermission(user.role, 'expenses:write')
+    ? roleHasPermission(user.role, 'finances:approve')
     : false;
 
   const projectFilter =
@@ -164,7 +173,7 @@ export function ExpensesPage({
   const content = (
     <>
       {!compact ? (
-        <div className="mb-4 grid gap-3 md:grid-cols-2">
+        <FilterBar className="mb-4">
           <Input
             label="Suche"
             name="search"
@@ -186,7 +195,7 @@ export function ExpensesPage({
               setPage(1);
             }}
           />
-        </div>
+        </FilterBar>
       ) : null}
 
       {showForm && canWrite ? (
@@ -298,9 +307,9 @@ export function ExpensesPage({
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -339,7 +348,7 @@ export function ExpensesPage({
         <EmptyState
           title="Keine Ausgaben"
           description="Erfassen Sie projektbezogene oder allgemeine Ausgaben."
-          actionLabel={canWrite ? 'Neue Ausgabe' : undefined}
+          actionLabel={canWrite ? 'New expense' : undefined}
           onAction={
             canWrite
               ? () => {
@@ -352,118 +361,121 @@ export function ExpensesPage({
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Nummer</th>
-                  <th className="px-3 py-2 font-medium">Beschreibung</th>
+        <DataTable
+          footer={
+            <>
+              <span>
+                Seite {query.data.meta.page} von {query.data.meta.totalPages} (
+                {query.data.meta.total} gesamt)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Zurück
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= query.data.meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Weiter
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Nummer</th>
+                <th className={dataTableThClassName()}>Beschreibung</th>
+                {!projectFilter ? (
+                  <th className={dataTableThClassName()}>Projekt</th>
+                ) : null}
+                <th className={dataTableThClassName()}>Kategorie</th>
+                <th className={dataTableThClassName()}>Status</th>
+                <th className={dataTableThClassName('right')}>Brutto</th>
+                <th className={dataTableThClassName()}>Fällig</th>
+                <th className={dataTableThClassName()}>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.data.map((expense) => (
+                <tr key={expense.id} className={dataTableRowClassName()}>
+                  <td className={`${dataTableTdClassName()} font-medium`}>
+                    {expense.expenseNumber}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {expense.description}
+                  </td>
                   {!projectFilter ? (
-                    <th className="px-3 py-2 font-medium">Projekt</th>
+                    <td className={dataTableTdClassName()}>
+                      {expense.project ? (
+                        <Link
+                          className="text-brand hover:underline"
+                          to={`/projects/${expense.project.id}?tab=expenses`}
+                        >
+                          {expense.project.projectNumber}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                   ) : null}
-                  <th className="px-3 py-2 font-medium">Kategorie</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">Brutto</th>
-                  <th className="px-3 py-2 font-medium">Fällig</th>
-                  <th className="px-3 py-2 font-medium">Aktionen</th>
+                  <td className={dataTableTdClassName()}>
+                    {BUDGET_CATEGORY_LABELS[expense.category]}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <ExpenseStatusBadge status={expense.status} />
+                  </td>
+                  <td className={dataTableTdClassName('right')}>
+                    <CurrencyValue value={expense.grossAmount} size="sm" />
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {formatDateDe(expense.dueDate)}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <div className="flex flex-wrap gap-2">
+                      {canApprove &&
+                      (expense.status === 'DRAFT' ||
+                        expense.status === 'PENDING') ? (
+                        <button
+                          type="button"
+                          className="text-brand hover:underline"
+                          onClick={() => approveMutation.mutate(expense.id)}
+                        >
+                          Freigeben
+                        </button>
+                      ) : null}
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className="text-danger hover:underline"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Ausgabe „${expense.expenseNumber}“ löschen?`,
+                              )
+                            ) {
+                              deleteMutation.mutate(expense.id);
+                            }
+                          }}
+                        >
+                          Löschen
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((expense) => (
-                  <tr key={expense.id} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium">
-                      {expense.expenseNumber}
-                    </td>
-                    <td className="px-3 py-3">{expense.description}</td>
-                    {!projectFilter ? (
-                      <td className="px-3 py-3">
-                        {expense.project ? (
-                          <Link
-                            className="text-[var(--color-brand)] hover:underline"
-                            to={`/projects/${expense.project.id}?tab=expenses`}
-                          >
-                            {expense.project.projectNumber}
-                          </Link>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    ) : null}
-                    <td className="px-3 py-3">
-                      {BUDGET_CATEGORY_LABELS[expense.category]}
-                    </td>
-                    <td className="px-3 py-3">
-                      <ExpenseStatusBadge status={expense.status} />
-                    </td>
-                    <td className="px-3 py-3">
-                      {formatCurrency(expense.grossAmount)}
-                    </td>
-                    <td className="px-3 py-3">
-                      {formatDateDe(expense.dueDate)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {canApprove &&
-                        (expense.status === 'DRAFT' ||
-                          expense.status === 'PENDING') ? (
-                          <button
-                            type="button"
-                            className="text-[var(--color-brand)] hover:underline"
-                            onClick={() => approveMutation.mutate(expense.id)}
-                          >
-                            Freigeben
-                          </button>
-                        ) : null}
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            className="text-[var(--color-danger)] hover:underline"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Ausgabe „${expense.expenseNumber}“ löschen?`,
-                                )
-                              ) {
-                                deleteMutation.mutate(expense.id);
-                              }
-                            }}
-                          >
-                            Löschen
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-            <span>
-              Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-              {query.data.meta.total} gesamt)
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Zurück
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= query.data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Weiter
-              </Button>
-            </div>
-          </div>
-        </Card>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </>
   );
@@ -472,7 +484,7 @@ export function ExpensesPage({
     return (
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-[var(--color-muted)]">
+          <p className="text-sm text-muted">
             Ausgaben für dieses Projekt
           </p>
           <div className="flex gap-2">
@@ -490,7 +502,7 @@ export function ExpensesPage({
                   setFormError(null);
                 }}
               >
-                Neue Ausgabe
+                New expense
               </Button>
             ) : null}
           </div>
@@ -503,8 +515,8 @@ export function ExpensesPage({
   return (
     <div>
       <PageHeader
-        title="Ausgaben"
-        description="Projekt- und Unternehmensausgaben mit Freigabe."
+        title="Expenses"
+        description="Operational costs, approval, and payment status."
         actions={
           canWrite ? (
             <Button
@@ -514,7 +526,7 @@ export function ExpensesPage({
                 setFormError(null);
               }}
             >
-              Neue Ausgabe
+              New expense
             </Button>
           ) : null
         }

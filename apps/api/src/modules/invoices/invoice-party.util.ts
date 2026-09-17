@@ -21,7 +21,7 @@ export async function assertCustomerInvoiceParty(
   }
 }
 
-export async function assertSupplierInvoiceParty(
+export function assertSupplierInvoiceParty(
   type: InvoiceType,
   supplierId?: string | null,
   subcontractorId?: string | null,

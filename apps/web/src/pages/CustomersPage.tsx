@@ -2,12 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { roleHasPermission } from '@fbm/shared';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import {
+  DataTable,
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
+import { FilterBar } from '../components/ui/FilterBar';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonCard } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
 import {
@@ -99,10 +108,10 @@ export function CustomersPage() {
   );
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Customers"
-        description="Customer master data for construction projects."
+        description="Client companies linked to projects."
         actions={
           canWrite ? (
             <Button
@@ -119,7 +128,7 @@ export function CustomersPage() {
         }
       />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+      <FilterBar>
         <Input
           label="Search"
           name="search"
@@ -130,10 +139,10 @@ export function CustomersPage() {
           }}
           placeholder="Company, contact, city…"
         />
-      </div>
+      </FilterBar>
 
       {showForm && canWrite ? (
-        <Card className="mb-6" title={title}>
+        <Card title={title}>
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -218,9 +227,9 @@ export function CustomersPage() {
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -242,20 +251,18 @@ export function CustomersPage() {
       ) : null}
 
       {query.isLoading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-8 w-8" />
+        <div className="grid gap-3">
+          <SkeletonCard className="h-40" />
+          <SkeletonCard className="h-40" />
         </div>
       ) : null}
 
       {query.error ? (
-        <EmptyState
-          title="Could not load customers"
-          description={
-            query.error instanceof ApiError
-              ? query.error.message
-              : 'Unexpected error'
-          }
-        />
+        <Alert tone="danger" title="Could not load customers">
+          {query.error instanceof ApiError
+            ? query.error.message
+            : 'Unexpected error'}
+        </Alert>
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
@@ -275,113 +282,116 @@ export function CustomersPage() {
       ) : null}
 
       {query.data && query.data.data.length > 0 ? (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Company</th>
-                  <th className="px-3 py-2 font-medium">Contact</th>
-                  <th className="px-3 py-2 font-medium">City</th>
-                  <th className="px-3 py-2 font-medium">Projects</th>
-                  <th className="px-3 py-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.data.map((customer) => (
-                  <tr key={customer.id} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium">
-                      {customer.companyName}
-                    </td>
-                    <td className="px-3 py-3">
-                      {customer.contactPerson ?? '—'}
-                    </td>
-                    <td className="px-3 py-3">{customer.city ?? '—'}</td>
-                    <td className="px-3 py-3">
-                      {customer._count?.projects ?? 0}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          className="text-[var(--color-brand)] hover:underline"
-                          to={`/projects?customerId=${customer.id}`}
+        <DataTable
+          footer={
+            <>
+              <span>
+                Page {query.data.meta.page} of {query.data.meta.totalPages} (
+                {query.data.meta.total} total)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= query.data.meta.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          }
+        >
+          <table className="min-w-full text-left text-sm">
+            <thead className={dataTableHeadClassName()}>
+              <tr>
+                <th className={dataTableThClassName()}>Company</th>
+                <th className={dataTableThClassName()}>Contact</th>
+                <th className={dataTableThClassName()}>City</th>
+                <th className={dataTableThClassName()}>Projects</th>
+                <th className={dataTableThClassName()}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.data.map((customer) => (
+                <tr key={customer.id} className={dataTableRowClassName()}>
+                  <td className={`${dataTableTdClassName()} font-medium`}>
+                    {customer.companyName}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {customer.contactPerson ?? '—'}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {customer.city ?? '—'}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {customer._count?.projects ?? 0}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        className="text-brand hover:underline"
+                        to={`/projects?customerId=${customer.id}`}
+                      >
+                        Projects
+                      </Link>
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          className="text-ink hover:underline"
+                          onClick={() => {
+                            setEditingId(customer.id);
+                            setForm({
+                              companyName: customer.companyName,
+                              contactPerson: customer.contactPerson ?? '',
+                              email: customer.email ?? '',
+                              phone: customer.phone ?? '',
+                              street: customer.street ?? '',
+                              postalCode: customer.postalCode ?? '',
+                              city: customer.city ?? '',
+                              country: customer.country,
+                              vatId: customer.vatId ?? '',
+                              taxNumber: customer.taxNumber ?? '',
+                              notes: customer.notes ?? '',
+                            });
+                            setShowForm(true);
+                          }}
                         >
-                          Projects
-                        </Link>
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            className="text-slate-700 hover:underline"
-                            onClick={() => {
-                              setEditingId(customer.id);
-                              setForm({
-                                companyName: customer.companyName,
-                                contactPerson: customer.contactPerson ?? '',
-                                email: customer.email ?? '',
-                                phone: customer.phone ?? '',
-                                street: customer.street ?? '',
-                                postalCode: customer.postalCode ?? '',
-                                city: customer.city ?? '',
-                                country: customer.country,
-                                vatId: customer.vatId ?? '',
-                                taxNumber: customer.taxNumber ?? '',
-                                notes: customer.notes ?? '',
-                              });
-                              setShowForm(true);
-                            }}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button
-                            type="button"
-                            className="text-[var(--color-danger)] hover:underline"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  `Delete customer “${customer.companyName}”?`,
-                                )
-                              ) {
-                                deleteMutation.mutate(customer.id);
-                              }
-                            }}
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-muted)]">
-            <span>
-              Page {query.data.meta.page} of {query.data.meta.totalPages} (
-              {query.data.meta.total} total)
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= query.data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </Card>
+                          Edit
+                        </button>
+                      ) : null}
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          className="text-danger hover:underline"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete customer “${customer.companyName}”?`,
+                              )
+                            ) {
+                              deleteMutation.mutate(customer.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
       ) : null}
     </div>
   );

@@ -5,6 +5,7 @@ import {
   money,
 } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
+import { FinanceQueryService } from './finance-query.service';
 
 const OPEN_INVOICE_STATUSES = [
   'SENT',
@@ -15,66 +16,18 @@ const OPEN_INVOICE_STATUSES = [
 
 @Injectable()
 export class ProjectFinanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly financeQuery: FinanceQueryService,
+  ) {}
 
-  /** Load cost rows for a project (or company-wide when projectId omitted). */
   async loadCostRows(projectId?: string) {
-    const projectFilter = projectId ? { projectId } : {};
-
-    const [expenses, supplierInvoices] = await Promise.all([
-      this.prisma.expense.findMany({
-        where: {
-          ...projectFilter,
-          deletedAt: null,
-          status: { not: 'CANCELLED' },
-        },
-        select: {
-          status: true,
-          grossAmount: true,
-          paidAmount: true,
-          invoiceNumber: true,
-          category: true,
-          supplierId: true,
-        },
-      }),
-      this.prisma.invoice.findMany({
-        where: {
-          ...projectFilter,
-          deletedAt: null,
-          type: 'SUPPLIER',
-          status: { notIn: ['CANCELLED', 'DRAFT'] },
-        },
-        select: {
-          status: true,
-          grossAmount: true,
-          paidAmount: true,
-          invoiceNumber: true,
-          supplierId: true,
-        },
-      }),
-    ]);
-
-    return {
-      expenses: expenses.map((row) => ({
-        status: row.status,
-        grossAmount: row.grossAmount.toString(),
-        paidAmount: row.paidAmount.toString(),
-        invoiceNumber: row.invoiceNumber,
-        category: row.category,
-        supplierId: row.supplierId,
-      })),
-      supplierInvoices: supplierInvoices.map((row) => ({
-        status: row.status,
-        grossAmount: row.grossAmount.toString(),
-        paidAmount: row.paidAmount.toString(),
-        invoiceNumber: row.invoiceNumber,
-        supplierId: row.supplierId,
-      })),
-    };
+    return this.financeQuery.loadCostRows(projectId);
   }
 
   async getOverviewTotals(projectId: string) {
-    const { expenses, supplierInvoices } = await this.loadCostRows(projectId);
+    const { expenses, supplierInvoices } =
+      await this.financeQuery.loadCostRows(projectId);
 
     const customerInvoices = await this.prisma.invoice.findMany({
       where: {

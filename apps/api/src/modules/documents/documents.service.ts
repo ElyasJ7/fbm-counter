@@ -179,6 +179,9 @@ export class DocumentsService {
     if (!document) {
       throw new NotFoundException('Document not found');
     }
+    if (!document.storageKey) {
+      throw new NotFoundException('Stored file is missing');
+    }
     if (!(await this.storage.fileExists(document.storageKey))) {
       throw new NotFoundException('Stored file is missing');
     }

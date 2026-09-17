@@ -55,10 +55,6 @@ export class UpdateExpenseDto {
   taxRate?: string;
 
   @IsOptional()
-  @IsNumberString()
-  paidAmount?: string;
-
-  @IsOptional()
   @IsEnum(ExpenseStatus)
   status?: ExpenseStatus;
 

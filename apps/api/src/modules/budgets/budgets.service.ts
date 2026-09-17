@@ -1,9 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
-import {
-  BUDGET_CATEGORY_LABELS,
-  type BudgetCategory as SharedBudgetCategory,
-} from '@fbm/shared';
+import { BUDGET_CATEGORY_LABELS } from '@fbm/shared';
 import { aggregateCosts, computeBudgetLine, money } from '@fbm/financial-core';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';

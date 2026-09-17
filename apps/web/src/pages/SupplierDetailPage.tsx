@@ -6,33 +6,29 @@ import {
   ExpenseStatusBadge,
   InvoiceStatusBadge,
 } from '../components/finance/StatusBadges';
+import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { CurrencyValue } from '../components/ui/CurrencyValue';
+import {
+  dataTableHeadClassName,
+  dataTableRowClassName,
+  dataTableTdClassName,
+  dataTableThClassName,
+} from '../components/ui/DataTable';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Spinner } from '../components/ui/Spinner';
+import { StatCard } from '../components/ui/StatCard';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency, formatDateDe } from '../lib/format';
+import { formatDateDe } from '../lib/format';
 import {
   fetchSupplier,
   updateSupplier,
   type SupplierInput,
 } from '../services/partners';
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-[var(--color-border)] bg-slate-50 p-4">
-      <p className="text-xs font-medium tracking-wide text-[var(--color-muted)] uppercase">
-        {label}
-      </p>
-      <p className="mt-2 text-lg font-semibold text-[var(--color-ink)]">
-        {value}
-      </p>
-    </div>
-  );
-}
 
 export function SupplierDetailPage() {
   const { id = '' } = useParams();
@@ -114,13 +110,13 @@ export function SupplierDetailPage() {
   if (query.error || !query.data) {
     return (
       <EmptyState
-        title="Lieferant konnte nicht geladen werden"
+        title="Could not load supplier"
         description={
           query.error instanceof ApiError
             ? query.error.message
-            : 'Unerwarteter Fehler'
+            : 'Unexpected error'
         }
-        actionLabel="Zurück zu Lieferanten"
+        actionLabel="Back to suppliers"
         onAction={() => navigate('/suppliers')}
       />
     );
@@ -132,14 +128,14 @@ export function SupplierDetailPage() {
     .join(', ');
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={supplier.companyName}
-        description="Lieferanten-Stammdaten, Einkäufe und offene Beträge."
+        description="Supplier master data, purchases, and open balances."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link to="/suppliers">
-              <Button variant="secondary">Alle Lieferanten</Button>
+              <Button variant="secondary">All suppliers</Button>
             </Link>
             {canWrite ? (
               <Button
@@ -149,30 +145,39 @@ export function SupplierDetailPage() {
                   setFormError(null);
                 }}
               >
-                {editing ? 'Bearbeitung schließen' : 'Bearbeiten'}
+                {editing ? 'Close editing' : 'Edit'}
               </Button>
             ) : null}
           </div>
         }
       />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Metric
-          label="Einkäufe gesamt"
-          value={formatCurrency(supplier.totals.totalPurchases)}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Total purchases"
+          value={
+            <CurrencyValue value={supplier.totals.totalPurchases} size="md" />
+          }
         />
-        <Metric
-          label="Bezahlt"
-          value={formatCurrency(supplier.totals.paidAmount)}
+        <StatCard
+          label="Paid"
+          value={
+            <CurrencyValue value={supplier.totals.paidAmount} size="md" />
+          }
         />
-        <Metric
-          label="Offen"
-          value={formatCurrency(supplier.totals.outstandingBalance)}
+        <StatCard
+          label="Outstanding"
+          value={
+            <CurrencyValue
+              value={supplier.totals.outstandingBalance}
+              size="md"
+            />
+          }
         />
       </div>
 
       {editing && canWrite && form ? (
-        <Card className="mb-6" title="Lieferant bearbeiten">
+        <Card title="Edit supplier">
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -305,9 +310,9 @@ export function SupplierDetailPage() {
               }
             />
             {formError ? (
-              <p className="md:col-span-2 text-sm text-[var(--color-danger)]">
+              <Alert tone="danger" className="md:col-span-2">
                 {formError}
-              </p>
+              </Alert>
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
@@ -325,43 +330,43 @@ export function SupplierDetailPage() {
         </Card>
       ) : null}
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card title="Kontaktdaten">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Contact">
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-[var(--color-muted)]">Ansprechpartner</dt>
+              <dt className="text-muted">Contact person</dt>
               <dd className="font-medium">{supplier.contactPerson ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">E-Mail</dt>
+              <dt className="text-muted">Email</dt>
               <dd>{supplier.email ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Telefon</dt>
+              <dt className="text-muted">Phone</dt>
               <dd>{supplier.phone ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Adresse</dt>
+              <dt className="text-muted">Address</dt>
               <dd>{address || '—'}</dd>
             </div>
           </dl>
         </Card>
-        <Card title="Zahlungsdaten">
+        <Card title="Payment details">
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-[var(--color-muted)]">USt-IdNr.</dt>
+              <dt className="text-muted">VAT ID</dt>
               <dd>{supplier.vatId ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Steuernummer</dt>
+              <dt className="text-muted">Tax number</dt>
               <dd>{supplier.taxNumber ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">IBAN</dt>
+              <dt className="text-muted">IBAN</dt>
               <dd>{supplier.iban ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-[var(--color-muted)]">Zahlungsbedingungen</dt>
+              <dt className="text-muted">Payment terms</dt>
               <dd>{supplier.paymentTerms ?? '—'}</dd>
             </div>
           </dl>
@@ -369,47 +374,47 @@ export function SupplierDetailPage() {
       </div>
 
       <div className="space-y-6">
-        <Card title="Rechnungen">
+        <Card title="Invoices" padding="none">
           {supplier.invoices.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">
-              Keine Rechnungen zugeordnet.
+            <p className="px-5 py-4 text-sm text-muted">
+              No invoices assigned.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Nummer</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Datum</th>
-                    <th className="px-3 py-2 font-medium">Brutto</th>
-                    <th className="px-3 py-2 font-medium">Projekt</th>
+                    <th className={dataTableThClassName()}>Number</th>
+                    <th className={dataTableThClassName()}>Status</th>
+                    <th className={dataTableThClassName()}>Date</th>
+                    <th className={dataTableThClassName('right')}>Gross</th>
+                    <th className={dataTableThClassName()}>Project</th>
                   </tr>
                 </thead>
                 <tbody>
                   {supplier.invoices.map((invoice) => (
-                    <tr key={invoice.id} className="border-b border-slate-100">
-                      <td className="px-3 py-3 font-medium">
+                    <tr key={invoice.id} className={dataTableRowClassName()}>
+                      <td className={`${dataTableTdClassName()} font-medium`}>
                         <Link
-                          className="text-[var(--color-brand)] hover:underline"
+                          className="text-brand hover:underline"
                           to={`/invoices?search=${encodeURIComponent(invoice.invoiceNumber)}`}
                         >
                           {invoice.invoiceNumber}
                         </Link>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         <InvoiceStatusBadge status={invoice.status} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {formatDateDe(invoice.issueDate)}
                       </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(invoice.grossAmount)}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue value={invoice.grossAmount} size="sm" />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {invoice.project ? (
                           <Link
-                            className="text-[var(--color-brand)] hover:underline"
+                            className="text-brand hover:underline"
                             to={`/projects/${invoice.project.id}`}
                           >
                             {invoice.project.projectNumber}
@@ -426,45 +431,47 @@ export function SupplierDetailPage() {
           )}
         </Card>
 
-        <Card title="Ausgaben">
+        <Card title="Expenses" padding="none">
           {supplier.expenses.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">
-              Keine Ausgaben zugeordnet.
+            <p className="px-5 py-4 text-sm text-muted">
+              No expenses assigned.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                <thead className={dataTableHeadClassName()}>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Nummer</th>
-                    <th className="px-3 py-2 font-medium">Beschreibung</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Brutto</th>
-                    <th className="px-3 py-2 font-medium">Projekt</th>
+                    <th className={dataTableThClassName()}>Number</th>
+                    <th className={dataTableThClassName()}>Description</th>
+                    <th className={dataTableThClassName()}>Status</th>
+                    <th className={dataTableThClassName('right')}>Gross</th>
+                    <th className={dataTableThClassName()}>Project</th>
                   </tr>
                 </thead>
                 <tbody>
                   {supplier.expenses.map((expense) => (
-                    <tr key={expense.id} className="border-b border-slate-100">
-                      <td className="px-3 py-3 font-medium">
+                    <tr key={expense.id} className={dataTableRowClassName()}>
+                      <td className={`${dataTableTdClassName()} font-medium`}>
                         <Link
-                          className="text-[var(--color-brand)] hover:underline"
+                          className="text-brand hover:underline"
                           to={`/expenses?search=${encodeURIComponent(expense.expenseNumber)}`}
                         >
                           {expense.expenseNumber}
                         </Link>
                       </td>
-                      <td className="px-3 py-3">{expense.description}</td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
+                        {expense.description}
+                      </td>
+                      <td className={dataTableTdClassName()}>
                         <ExpenseStatusBadge status={expense.status} />
                       </td>
-                      <td className="px-3 py-3">
-                        {formatCurrency(expense.grossAmount)}
+                      <td className={dataTableTdClassName('right')}>
+                        <CurrencyValue value={expense.grossAmount} size="sm" />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={dataTableTdClassName()}>
                         {expense.project ? (
                           <Link
-                            className="text-[var(--color-brand)] hover:underline"
+                            className="text-brand hover:underline"
                             to={`/projects/${expense.project.id}`}
                           >
                             {expense.project.projectNumber}
@@ -481,17 +488,15 @@ export function SupplierDetailPage() {
           )}
         </Card>
 
-        <Card title="Verwandte Projekte">
+        <Card title="Related projects">
           {supplier.projects.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)]">
-              Keine Projekte verknüpft.
-            </p>
+            <p className="text-sm text-muted">No projects linked.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {supplier.projects.map((project) => (
                 <li key={project.id}>
                   <Link
-                    className="font-medium text-[var(--color-brand)] hover:underline"
+                    className="font-medium text-brand hover:underline"
                     to={`/projects/${project.id}`}
                   >
                     {project.projectNumber} · {project.name}

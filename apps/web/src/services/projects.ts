@@ -85,12 +85,17 @@ export function fetchProjects(params: {
   pageSize?: number;
   search?: string;
   status?: ProjectStatus | '';
+  customerId?: string;
+  projectManagerId?: string;
 }) {
   const query = new URLSearchParams();
   if (params.page) query.set('page', String(params.page));
   if (params.pageSize) query.set('pageSize', String(params.pageSize));
   if (params.search) query.set('search', params.search);
   if (params.status) query.set('status', params.status);
+  if (params.customerId) query.set('customerId', params.customerId);
+  if (params.projectManagerId)
+    query.set('projectManagerId', params.projectManagerId);
   const suffix = query.toString() ? `?${query}` : '';
   return apiRequest<PaginatedResponse<ProjectListItemDto>>(
     `/projects${suffix}`,
