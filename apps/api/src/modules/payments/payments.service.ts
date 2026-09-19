@@ -18,6 +18,8 @@ import {
   toDateOnlyString,
   type InvoiceStatusName,
 } from '@fbm/financial-core';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -44,6 +46,7 @@ export class PaymentsService {
     private readonly budgets: BudgetsService,
     private readonly notifications: NotificationsService,
     private readonly numbering: NumberingService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private async syncBudgetAfterSupplierPayment(
@@ -101,17 +104,21 @@ export class PaymentsService {
     };
   }
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    invoiceId?: string;
-    projectId?: string;
-  }) {
+  async findAll(
+    params: {
+      page?: number;
+      pageSize?: number;
+      invoiceId?: string;
+      projectId?: string;
+    },
+    user: AuthUserDto,
+  ) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
 
     const where: Prisma.PaymentWhereInput = {
       deletedAt: null,
+      AND: [this.projectAccess.paymentWhere(user)],
       ...(params.invoiceId ? { invoiceId: params.invoiceId } : {}),
       ...(params.projectId ? { projectId: params.projectId } : {}),
     };
@@ -138,7 +145,8 @@ export class PaymentsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessPayment(user, id);
     const payment = await this.prisma.payment.findFirst({
       where: { id, deletedAt: null },
       include: paymentInclude,
@@ -149,7 +157,15 @@ export class PaymentsService {
     return this.serialize(payment);
   }
 
-  async create(dto: CreatePaymentDto, actorId: string) {
+  async create(dto: CreatePaymentDto, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessInvoice(user, dto.invoiceId);
+    if (dto.projectId) {
+      await this.projectAccess.assertCanAccessOptionalProject(
+        user,
+        dto.projectId,
+      );
+    }
     const result = await this.prisma.$transaction(async (tx) => {
       const invoice = await lockInvoiceForUpdate(tx, dto.invoiceId);
       if (!invoice) {
@@ -259,7 +275,9 @@ export class PaymentsService {
     return result.payment;
   }
 
-  async remove(id: string, actorId: string) {
+  async remove(id: string, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessPayment(user, id);
     const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findFirst({
         where: { id, deletedAt: null },

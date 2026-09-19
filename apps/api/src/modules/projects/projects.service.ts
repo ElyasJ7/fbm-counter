@@ -1,10 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ProjectStatus } from '@prisma/client';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { ProjectFinanceService } from '../finance/project-finance.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateProjectDto } from './dto/create-project.dto';
@@ -29,6 +32,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectFinance: ProjectFinanceService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private decimalToString(value: Prisma.Decimal | string | number): string {
@@ -121,20 +125,24 @@ export class ProjectsService {
     }
   }
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    status?: ProjectStatus;
-    customerId?: string;
-    projectManagerId?: string;
-  }) {
+  async findAll(
+    params: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      status?: ProjectStatus;
+      customerId?: string;
+      projectManagerId?: string;
+    },
+    user: AuthUserDto,
+  ) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const search = params.search?.trim();
 
     const where: Prisma.ProjectWhereInput = {
       deletedAt: null,
+      ...this.projectAccess.projectWhere(user),
       ...(params.status ? { status: params.status } : {}),
       ...(params.customerId ? { customerId: params.customerId } : {}),
       ...(params.projectManagerId
@@ -177,7 +185,8 @@ export class ProjectsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessProject(user, id);
     const project = await this.prisma.project.findFirst({
       where: { id, deletedAt: null },
       include: projectDetailInclude,
@@ -188,9 +197,19 @@ export class ProjectsService {
     return this.serializeDetail(project);
   }
 
-  async create(dto: CreateProjectDto, actorId: string) {
+  async create(dto: CreateProjectDto, actor: AuthUserDto) {
     await this.assertCustomerExists(dto.customerId);
-    await this.assertManagerExists(dto.projectManagerId);
+
+    let projectManagerId = dto.projectManagerId;
+    if (this.projectAccess.isScoped(actor.role)) {
+      if (projectManagerId && projectManagerId !== actor.id) {
+        throw new ForbiddenException(
+          'PROJECT_MANAGER can only assign themselves as project manager',
+        );
+      }
+      projectManagerId = actor.id;
+    }
+    await this.assertManagerExists(projectManagerId);
 
     // projectNumber is globally unique (including soft-deleted rows)
     const existingNumber = await this.prisma.project.findFirst({
@@ -216,7 +235,7 @@ export class ProjectsService {
             description: dto.description,
             customerId: dto.customerId,
             customerContact: dto.customerContact,
-            projectManagerId: dto.projectManagerId,
+            projectManagerId,
             siteStreet: dto.siteStreet,
             sitePostalCode: dto.sitePostalCode,
             siteCity: dto.siteCity,
@@ -241,7 +260,7 @@ export class ProjectsService {
 
         await tx.auditLog.create({
           data: {
-            actorId,
+            actorId: actor.id,
             action: 'PROJECT_CREATED',
             entityType: 'Project',
             entityId: row.id,
@@ -268,7 +287,8 @@ export class ProjectsService {
     }
   }
 
-  async update(id: string, dto: UpdateProjectDto, actorId: string) {
+  async update(id: string, dto: UpdateProjectDto, actor: AuthUserDto) {
+    await this.projectAccess.assertCanAccessProject(actor, id);
     const existing = await this.prisma.project.findFirst({
       where: { id, deletedAt: null },
     });
@@ -280,6 +300,14 @@ export class ProjectsService {
       await this.assertCustomerExists(dto.customerId);
     }
     if (dto.projectManagerId !== undefined) {
+      if (
+        this.projectAccess.isScoped(actor.role) &&
+        dto.projectManagerId !== actor.id
+      ) {
+        throw new ForbiddenException(
+          'PROJECT_MANAGER can only assign themselves as project manager',
+        );
+      }
       await this.assertManagerExists(dto.projectManagerId);
     }
     if (dto.projectNumber && dto.projectNumber !== existing.projectNumber) {
@@ -344,7 +372,7 @@ export class ProjectsService {
 
       await tx.auditLog.create({
         data: {
-          actorId,
+          actorId: actor.id,
           action: 'PROJECT_UPDATED',
           entityType: 'Project',
           entityId: id,
@@ -369,7 +397,8 @@ export class ProjectsService {
     });
   }
 
-  async remove(id: string, actorId: string) {
+  async remove(id: string, actor: AuthUserDto) {
+    await this.projectAccess.assertCanAccessProject(actor, id);
     const existing = await this.prisma.project.findFirst({
       where: { id, deletedAt: null },
     });
@@ -388,7 +417,7 @@ export class ProjectsService {
       });
       await tx.auditLog.create({
         data: {
-          actorId,
+          actorId: actor.id,
           action: 'PROJECT_DELETED',
           entityType: 'Project',
           entityId: id,
@@ -403,7 +432,8 @@ export class ProjectsService {
     return { success: true };
   }
 
-  async listSubcontractors(projectId: string) {
+  async listSubcontractors(projectId: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessProject(user, projectId);
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, deletedAt: null },
       select: { id: true },
@@ -447,7 +477,8 @@ export class ProjectsService {
       }));
   }
 
-  async listActivity(projectId: string) {
+  async listActivity(projectId: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessProject(user, projectId);
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, deletedAt: null },
       select: { id: true },

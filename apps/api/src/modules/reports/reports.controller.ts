@@ -1,7 +1,9 @@
 import { Controller, Get, Query, StreamableFile } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { REPORT_EXPORT_TYPES, type ReportExportType } from '@fbm/shared';
+import type { AuthUserDto } from '@fbm/shared';
 import { RequirePermissions } from '../../common/decorators/auth.decorators';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
@@ -11,14 +13,19 @@ export class ReportsController {
   @Get()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @RequirePermissions('reports:read')
-  getSummary(@Query('from') from?: string, @Query('to') to?: string) {
-    return this.reportsService.getSummary({ from, to });
+  getSummary(
+    @CurrentUser() user: AuthUserDto,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.reportsService.getSummary({ from, to }, user);
   }
 
   @Get('export')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @RequirePermissions('reports:export')
   async export(
+    @CurrentUser() user: AuthUserDto,
     @Query('type') type?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -29,10 +36,11 @@ export class ReportsController {
     ) as ReportExportType;
 
     if (format === 'pdf') {
-      const file = await this.reportsService.exportPdf(exportType, {
-        from,
-        to,
-      });
+      const file = await this.reportsService.exportPdf(
+        exportType,
+        { from, to },
+        user,
+      );
       const encodedName = encodeURIComponent(file.filename);
       return new StreamableFile(file.buffer, {
         type: 'application/pdf',
@@ -40,10 +48,11 @@ export class ReportsController {
       });
     }
 
-    const file = await this.reportsService.exportCsv(exportType, {
-      from,
-      to,
-    });
+    const file = await this.reportsService.exportCsv(
+      exportType,
+      { from, to },
+      user,
+    );
 
     const encodedName = encodeURIComponent(file.filename);
     return new StreamableFile(Buffer.from(file.content, 'utf8'), {

@@ -29,25 +29,29 @@ export class DocumentsController {
   @Get()
   @RequirePermissions('documents:read')
   findAll(
+    @CurrentUser() user: AuthUserDto,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('projectId') projectId?: string,
     @Query('category') category?: DocumentCategory,
   ) {
-    return this.documentsService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      search,
-      projectId,
-      category,
-    });
+    return this.documentsService.findAll(
+      {
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+        search,
+        projectId,
+        category,
+      },
+      user,
+    );
   }
 
   @Get(':id/download')
   @RequirePermissions('documents:read')
-  async download(@Param('id') id: string) {
-    const file = await this.documentsService.getDownload(id);
+  async download(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    const file = await this.documentsService.getDownload(id, user);
     const encodedName = encodeURIComponent(file.originalFileName);
     return new StreamableFile(file.stream, {
       type: file.mimeType,
@@ -58,8 +62,8 @@ export class DocumentsController {
 
   @Get(':id')
   @RequirePermissions('documents:read')
-  findOne(@Param('id') id: string) {
-    return this.documentsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    return this.documentsService.findOne(id, user);
   }
 
   @Post()
@@ -78,7 +82,7 @@ export class DocumentsController {
     @Body() dto: UploadDocumentDto,
     @CurrentUser() user: AuthUserDto,
   ) {
-    return this.documentsService.upload(file, dto, user.id);
+    return this.documentsService.upload(file, dto, user);
   }
 
   @Patch(':id')
@@ -88,12 +92,12 @@ export class DocumentsController {
     @Body() dto: UpdateDocumentDto,
     @CurrentUser() user: AuthUserDto,
   ) {
-    return this.documentsService.update(id, dto, user.id);
+    return this.documentsService.update(id, dto, user);
   }
 
   @Delete(':id')
   @RequirePermissions('documents:write')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    return this.documentsService.remove(id, user.id);
+    return this.documentsService.remove(id, user);
   }
 }

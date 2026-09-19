@@ -8,6 +8,8 @@ import {
   toDateOnlyString,
 } from '@fbm/financial-core';
 import type { BudgetCategory } from '@prisma/client';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { buildPdfBuffer } from '../common/pdf.util';
 import { FinanceQueryService } from '../finance/finance-query.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,6 +31,7 @@ export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly financeQuery: FinanceQueryService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private moneyStr(value: ReturnType<typeof money>) {
@@ -99,8 +102,9 @@ export class ReportsService {
     return toCsvDocument(rows);
   }
 
-  async getSummary(query: ReportQuery = {}) {
+  async getSummary(query: ReportQuery = {}, user: AuthUserDto) {
     const { from, to } = this.resolvePeriod(query);
+    const projectIds = await this.projectAccess.accessibleProjectIds(user);
 
     // Unscoped path: reuse scalable finance query service (same cost policy).
     if (!from && !to) {
@@ -114,16 +118,19 @@ export class ReportsService {
         months,
         projectProfitability,
       ] = await Promise.all([
-        this.financeQuery.customerRevenuePaid(),
-        this.financeQuery.companyCostTotals(),
-        this.financeQuery.outstandingByType('CUSTOMER'),
-        this.financeQuery.outstandingByType('SUPPLIER'),
-        this.financeQuery.projectKpis(),
-        this.financeQuery.cashFlowTotals(),
+        this.financeQuery.customerRevenuePaid(projectIds),
+        this.financeQuery.companyCostTotals(projectIds),
+        this.financeQuery.outstandingByType('CUSTOMER', projectIds),
+        this.financeQuery.outstandingByType('SUPPLIER', projectIds),
+        this.financeQuery.projectKpis(projectIds),
+        this.financeQuery.cashFlowTotals(projectIds),
         Promise.resolve(this.lastNMonths(12)),
-        this.financeQuery.projectProfitabilityRows(),
+        this.financeQuery.projectProfitabilityRows(projectIds),
       ]);
-      const monthlyCashFlow = await this.financeQuery.monthlyCashFlow(months);
+      const monthlyCashFlow = await this.financeQuery.monthlyCashFlow(
+        months,
+        projectIds,
+      );
       const totalBudget = money(projectKpis.totalBudget);
       const totalExpensePaid = money(costs.actualCosts);
       const budgetUtilizationPercent = totalBudget.isZero()
@@ -178,7 +185,10 @@ export class ReportsService {
     const [projects, customerInvoices, supplierInvoices, expenses, payments] =
       await Promise.all([
         this.prisma.project.findMany({
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            AND: [this.projectAccess.projectWhere(user)],
+          },
           select: {
             id: true,
             name: true,
@@ -194,6 +204,7 @@ export class ReportsService {
             deletedAt: null,
             type: 'CUSTOMER',
             status: { notIn: ['CANCELLED', 'DRAFT'] },
+            AND: [this.projectAccess.invoiceWhere(user)],
           },
           select: {
             projectId: true,
@@ -208,6 +219,7 @@ export class ReportsService {
             deletedAt: null,
             type: 'SUPPLIER',
             status: { notIn: ['CANCELLED', 'DRAFT'] },
+            AND: [this.projectAccess.invoiceWhere(user)],
           },
           select: {
             projectId: true,
@@ -219,7 +231,11 @@ export class ReportsService {
           },
         }),
         this.prisma.expense.findMany({
-          where: { deletedAt: null, status: { not: 'CANCELLED' } },
+          where: {
+            deletedAt: null,
+            status: { not: 'CANCELLED' },
+            AND: [this.projectAccess.expenseWhere(user)],
+          },
           select: {
             projectId: true,
             category: true,
@@ -234,6 +250,7 @@ export class ReportsService {
         this.prisma.payment.findMany({
           where: {
             deletedAt: null,
+            AND: [this.projectAccess.paymentWhere(user)],
             ...(from || to
               ? {
                   paymentDate: {
@@ -440,8 +457,9 @@ export class ReportsService {
   async exportCsv(
     type: 'summary' | 'profitability' | 'cashflow',
     query: ReportQuery = {},
+    user: AuthUserDto,
   ) {
-    const summary = await this.getSummary(query);
+    const summary = await this.getSummary(query, user);
     const currency = summary.currency;
 
     if (type === 'cashflow') {
@@ -560,8 +578,9 @@ export class ReportsService {
   async exportPdf(
     type: 'summary' | 'profitability' | 'cashflow',
     query: ReportQuery = {},
+    user: AuthUserDto,
   ) {
-    const summary = await this.getSummary(query);
+    const summary = await this.getSummary(query, user);
     const buffer = await buildPdfBuffer((doc) => {
       doc.fontSize(18).text('FBM Counter Bericht');
       doc

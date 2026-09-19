@@ -35,8 +35,8 @@ export class SuppliersController {
 
   @Get(':id')
   @RequirePermissions('suppliers:read')
-  findOne(@Param('id') id: string) {
-    return this.suppliersService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    return this.suppliersService.findOne(id, user);
   }
 
   @Post()

@@ -1,22 +1,41 @@
-# Authorization model (current) — H3 deferred
+# Authorization model (current) — H3 implemented
 
-FBM Counter is currently a **single-tenant company-wide** app.
+FBM Counter is a **single-tenant** app with **role permissions** plus **project-scoped object access** for Project Managers.
 
-## Who can read projects
+## Roles and permissions
 
-Roles with `projects:read`: ADMIN, MANAGEMENT, ACCOUNTING, PROJECT_MANAGER, VIEWER.
+Permission checks remain in `RolesGuard` (capability matrix). Object scope is enforced separately by `ProjectAccessService` (`apps/api/src/modules/authz/project-access.service.ts`), exported from the global `CommonModule`.
 
-Any authenticated user with that permission can open **any** project by ID.
-There is **no** assignment-scoped ACL for Project Managers.
+## Company-wide vs scoped
 
-## Who can modify projects
+| Role | Project scope |
+|------|----------------|
+| ADMIN, MANAGEMENT, ACCOUNTING, VIEWER | Company-wide (`accessibleProjectIds` → `null`) |
+| PROJECT_MANAGER | Only projects where `Project.projectManagerId === user.id` |
 
-Roles with `projects:write`: ADMIN, PROJECT_MANAGER (and ADMIN via full matrix).
+## Who can read / mutate projects
 
-Deletes require `projects:delete` (ADMIN).
+- `projects:read` / `projects:write` / `projects:delete` still gate the routes.
+- In addition, every project load/mutation calls `assertCanAccessProject`.
+- List endpoints AND `projectWhere(user)` into the Prisma filter.
+- On create, a scoped PM may only assign themselves as `projectManagerId`.
 
-## Project Managers today
+## Linked finance & documents (H3)
 
-Company-wide: a PM can read/write all projects, not only those where they are
-`projectManagerId`. H3 (project-scoped ACL) is intentionally **not** implemented
-in this remediation batch and needs a separate product decision.
+Controllers pass `@CurrentUser()` into services. Services use:
+
+- **List filters:** `invoiceWhere` / `expenseWhere` / `paymentWhere` / `documentWhere` / `budgetLineWhere`
+- **Single-object asserts:** `assertCanAccessInvoice` / `Expense` / `Payment` / `Document` / `Project` / `OptionalProject`
+- **Aggregates:** `accessibleProjectIds(user)` → `string[] \| null` (`null` = no filter)
+
+Wired modules:
+
+- Projects, invoices, expenses (incl. approve / recordPayment), payments, documents (**including download**), budgets
+- Search (projects / invoices / expenses / documents scoped; customers / suppliers / subcontractors remain company-wide master data)
+- Dashboard + `FinanceQueryService` (optional `projectIds` scope on aggregates)
+- Reports (summary / CSV / PDF)
+- Supplier & subcontractor **detail** financial history only (list master data stays company-wide)
+
+## Unscoped rows
+
+Invoices, expenses, payments, and documents with no assigned project are **hidden from PROJECT_MANAGER** (`assertCanAccessOptionalProject` rejects null `projectId` for scoped users).

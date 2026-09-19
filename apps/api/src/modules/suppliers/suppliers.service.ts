@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { aggregateSupplierSpend } from '@fbm/financial-core';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateSupplierDto } from './dto/create-supplier.dto';
 import type { UpdateSupplierDto } from './dto/update-supplier.dto';
@@ -13,7 +15,10 @@ type MoneyTotals = {
 
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
   private summarizeSupplier(
     invoices: Array<{
@@ -151,7 +156,7 @@ export class SuppliersService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
     const supplier = await this.prisma.supplier.findFirst({
       where: { id, deletedAt: null },
     });
@@ -159,9 +164,16 @@ export class SuppliersService {
       throw new NotFoundException('Supplier not found');
     }
 
+    const invoiceAccess = this.projectAccess.invoiceWhere(user);
+    const expenseAccess = this.projectAccess.expenseWhere(user);
+
     const [invoices, expenses] = await Promise.all([
       this.prisma.invoice.findMany({
-        where: { supplierId: id, deletedAt: null },
+        where: {
+          supplierId: id,
+          deletedAt: null,
+          AND: [invoiceAccess],
+        },
         orderBy: { issueDate: 'desc' },
         take: 20,
         include: {
@@ -169,7 +181,11 @@ export class SuppliersService {
         },
       }),
       this.prisma.expense.findMany({
-        where: { supplierId: id, deletedAt: null },
+        where: {
+          supplierId: id,
+          deletedAt: null,
+          AND: [expenseAccess],
+        },
         orderBy: { createdAt: 'desc' },
         take: 20,
         include: {
@@ -185,6 +201,7 @@ export class SuppliersService {
           supplierId: id,
           deletedAt: null,
           status: { not: 'CANCELLED' },
+          AND: [invoiceAccess],
         },
         select: {
           status: true,
@@ -198,6 +215,7 @@ export class SuppliersService {
           supplierId: id,
           deletedAt: null,
           status: { not: 'CANCELLED' },
+          AND: [expenseAccess],
         },
         select: {
           status: true,

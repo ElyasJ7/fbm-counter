@@ -39,8 +39,8 @@ export class SubcontractorsController {
 
   @Get(':id')
   @RequirePermissions('subcontractors:read')
-  findOne(@Param('id') id: string) {
-    return this.subcontractorsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    return this.subcontractorsService.findOne(id, user);
   }
 
   @Post()

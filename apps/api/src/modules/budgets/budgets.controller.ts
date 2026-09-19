@@ -13,10 +13,15 @@ export class BudgetsController {
   @RequirePermissions('finances:read')
   listForProject(
     @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthUserDto,
     @Query('sync') sync?: string,
   ) {
     const syncFromExpenses = sync === '1' || sync === 'true' || sync === 'yes';
-    return this.budgetsService.listForProject(projectId, syncFromExpenses);
+    return this.budgetsService.listForProject(
+      projectId,
+      syncFromExpenses,
+      user,
+    );
   }
 
   @Put('projects/:projectId')
@@ -26,6 +31,6 @@ export class BudgetsController {
     @Body() dto: UpsertBudgetLinesDto,
     @CurrentUser() user: AuthUserDto,
   ) {
-    return this.budgetsService.upsertForProject(projectId, dto, user.id);
+    return this.budgetsService.upsertForProject(projectId, dto, user);
   }
 }

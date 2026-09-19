@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DocumentCategory, Prisma } from '@prisma/client';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { UpdateDocumentDto } from './dto/update-document.dto';
@@ -59,6 +61,7 @@ export class DocumentsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private serialize(
@@ -113,19 +116,23 @@ export class DocumentsService {
     }
   }
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    projectId?: string;
-    category?: DocumentCategory;
-  }) {
+  async findAll(
+    params: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      projectId?: string;
+      category?: DocumentCategory;
+    },
+    user: AuthUserDto,
+  ) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const search = params.search?.trim();
 
     const where: Prisma.DocumentWhereInput = {
       deletedAt: null,
+      AND: [this.projectAccess.documentWhere(user)],
       ...(params.projectId ? { projectId: params.projectId } : {}),
       ...(params.category ? { category: params.category } : {}),
       ...(search
@@ -161,7 +168,8 @@ export class DocumentsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessDocument(user, id);
     const document = await this.prisma.document.findFirst({
       where: { id, deletedAt: null },
       include: documentInclude,
@@ -172,7 +180,8 @@ export class DocumentsService {
     return this.serialize(document);
   }
 
-  async getDownload(id: string) {
+  async getDownload(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessDocument(user, id);
     const document = await this.prisma.document.findFirst({
       where: { id, deletedAt: null },
     });
@@ -197,9 +206,15 @@ export class DocumentsService {
   async upload(
     file: Express.Multer.File,
     dto: UploadDocumentDto,
-    actorId: string,
+    user: AuthUserDto,
   ) {
+    const actorId = user.id;
     this.assertAllowedFile(file);
+
+    await this.projectAccess.assertCanAccessOptionalProject(
+      user,
+      dto.projectId,
+    );
 
     if (dto.projectId) {
       const project = await this.prisma.project.findFirst({
@@ -266,12 +281,21 @@ export class DocumentsService {
     }
   }
 
-  async update(id: string, dto: UpdateDocumentDto, actorId: string) {
+  async update(id: string, dto: UpdateDocumentDto, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessDocument(user, id);
     const existing = await this.prisma.document.findFirst({
       where: { id, deletedAt: null },
     });
     if (!existing) {
       throw new NotFoundException('Document not found');
+    }
+
+    if (dto.projectId !== undefined) {
+      await this.projectAccess.assertCanAccessOptionalProject(
+        user,
+        dto.projectId,
+      );
     }
 
     if (dto.projectId) {
@@ -322,7 +346,9 @@ export class DocumentsService {
     });
   }
 
-  async remove(id: string, actorId: string) {
+  async remove(id: string, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessDocument(user, id);
     const existing = await this.prisma.document.findFirst({
       where: { id, deletedAt: null },
     });

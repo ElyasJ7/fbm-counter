@@ -25,6 +25,7 @@ export class InvoicesController {
   @Get()
   @RequirePermissions('invoices:read')
   findAll(
+    @CurrentUser() user: AuthUserDto,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
@@ -32,21 +33,24 @@ export class InvoicesController {
     @Query('projectId') projectId?: string,
     @Query('status') status?: InvoiceStatus,
   ) {
-    return this.invoicesService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      search,
-      type,
-      projectId,
-      status,
-    });
+    return this.invoicesService.findAll(
+      {
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+        search,
+        type,
+        projectId,
+        status,
+      },
+      user,
+    );
   }
 
   @Get(':id/pdf')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @RequirePermissions('invoices:read')
-  async downloadPdf(@Param('id') id: string) {
-    const file = await this.invoicesService.renderPdf(id);
+  async downloadPdf(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    const file = await this.invoicesService.renderPdf(id, user);
     const encodedName = encodeURIComponent(file.filename);
     return new StreamableFile(file.buffer, {
       type: 'application/pdf',
@@ -56,14 +60,14 @@ export class InvoicesController {
 
   @Get(':id')
   @RequirePermissions('invoices:read')
-  findOne(@Param('id') id: string) {
-    return this.invoicesService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    return this.invoicesService.findOne(id, user);
   }
 
   @Post()
   @RequirePermissions('invoices:write')
   create(@Body() dto: CreateInvoiceDto, @CurrentUser() user: AuthUserDto) {
-    return this.invoicesService.create(dto, user.id);
+    return this.invoicesService.create(dto, user);
   }
 
   @Patch(':id')
@@ -73,12 +77,12 @@ export class InvoicesController {
     @Body() dto: UpdateInvoiceDto,
     @CurrentUser() user: AuthUserDto,
   ) {
-    return this.invoicesService.update(id, dto, user.id);
+    return this.invoicesService.update(id, dto, user);
   }
 
   @Delete(':id')
   @RequirePermissions('invoices:write')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    return this.invoicesService.remove(id, user.id);
+    return this.invoicesService.remove(id, user);
   }
 }

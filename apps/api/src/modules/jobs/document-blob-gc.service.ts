@@ -9,9 +9,13 @@ export type DocumentBlobGcConfig = {
   getRetentionDays: () => number;
 };
 
+/** Advisory lock key distinct from overdue job (872314059). */
+const BLOB_GC_LOCK_KEY = 872314060;
+
 /**
  * Delayed garbage collection for soft-deleted document blobs.
  * Retention: DOCUMENT_BLOB_RETENTION_DAYS (default 30).
+ * Multi-instance safe via PostgreSQL advisory lock.
  */
 @Injectable()
 export class DocumentBlobGcService {
@@ -31,6 +35,16 @@ export class DocumentBlobGcService {
       return { purged: 0, skipped: true };
     }
     this.running = true;
+
+    const locked = await this.prisma.$queryRaw<Array<{ locked: boolean }>>`
+      SELECT pg_try_advisory_lock(${BLOB_GC_LOCK_KEY}) AS locked
+    `;
+    if (!locked[0]?.locked) {
+      this.running = false;
+      this.logger.log('Document blob GC skipped: advisory lock held');
+      return { purged: 0, skipped: true };
+    }
+
     try {
       const result = await purgeExpiredDocumentBlobs({
         prisma: this.prisma,
@@ -41,6 +55,9 @@ export class DocumentBlobGcService {
       });
       return { ...result, skipped: false };
     } finally {
+      await this.prisma.$queryRaw`
+        SELECT pg_advisory_unlock(${BLOB_GC_LOCK_KEY})
+      `;
       this.running = false;
     }
   }

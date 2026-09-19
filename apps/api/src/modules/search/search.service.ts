@@ -1,11 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SearchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
-  async search(rawQuery: string) {
+  async search(rawQuery: string, user: AuthUserDto) {
     const query = rawQuery?.trim() ?? '';
     if (query.length < 2) {
       throw new BadRequestException('Query must be at least 2 characters');
@@ -26,6 +31,7 @@ export class SearchService {
       this.prisma.project.findMany({
         where: {
           deletedAt: null,
+          AND: [this.projectAccess.projectWhere(user)],
           OR: [
             { name: contains },
             { projectNumber: contains },
@@ -44,6 +50,7 @@ export class SearchService {
       this.prisma.invoice.findMany({
         where: {
           deletedAt: null,
+          AND: [this.projectAccess.invoiceWhere(user)],
           OR: [{ invoiceNumber: contains }, { notes: contains }],
         },
         take,
@@ -102,6 +109,7 @@ export class SearchService {
       this.prisma.document.findMany({
         where: {
           deletedAt: null,
+          AND: [this.projectAccess.documentWhere(user)],
           OR: [
             { title: contains },
             { originalFileName: contains },
@@ -120,6 +128,7 @@ export class SearchService {
       this.prisma.expense.findMany({
         where: {
           deletedAt: null,
+          AND: [this.projectAccess.expenseWhere(user)],
           OR: [
             { expenseNumber: contains },
             { description: contains },

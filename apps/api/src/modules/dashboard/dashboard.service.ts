@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import type { AuthUserDto } from '@fbm/shared';
 import { money } from '@fbm/financial-core';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceQueryService } from '../finance/finance-query.service';
 
@@ -8,6 +10,7 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly financeQuery: FinanceQueryService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private moneyStr(value: ReturnType<typeof money> | string) {
@@ -30,8 +33,9 @@ export class DashboardService {
     return keys;
   }
 
-  async getDashboard() {
+  async getDashboard(user: AuthUserDto) {
     const months = this.lastNMonths(12);
+    const projectIds = await this.projectAccess.accessibleProjectIds(user);
 
     const [
       totalRevenue,
@@ -47,27 +51,43 @@ export class DashboardService {
       budgetLines,
       paymentCount,
     ] = await Promise.all([
-      this.financeQuery.customerRevenuePaid(),
-      this.financeQuery.companyCostTotals(),
-      this.financeQuery.outstandingByType('CUSTOMER'),
-      this.financeQuery.outstandingByType('SUPPLIER'),
-      this.financeQuery.projectKpis(),
-      this.financeQuery.cashFlowTotals(),
-      this.financeQuery.monthlyCashFlow(months),
-      this.financeQuery.projectProfitabilityRows(),
-      this.financeQuery.invoiceStatusDistribution(),
+      this.financeQuery.customerRevenuePaid(projectIds),
+      this.financeQuery.companyCostTotals(projectIds),
+      this.financeQuery.outstandingByType('CUSTOMER', projectIds),
+      this.financeQuery.outstandingByType('SUPPLIER', projectIds),
+      this.financeQuery.projectKpis(projectIds),
+      this.financeQuery.cashFlowTotals(projectIds),
+      this.financeQuery.monthlyCashFlow(months, projectIds),
+      this.financeQuery.projectProfitabilityRows(projectIds),
+      this.financeQuery.invoiceStatusDistribution(projectIds),
       this.prisma.project.groupBy({
         by: ['status'],
-        where: { deletedAt: null },
+        where: {
+          deletedAt: null,
+          ...(projectIds === null ? {} : { id: { in: projectIds } }),
+        },
         _count: { _all: true },
       }),
       this.prisma.budgetLine.findMany({
+        where: projectIds === null ? {} : { projectId: { in: projectIds } },
         select: {
           plannedAmount: true,
           actualAmount: true,
         },
       }),
-      this.prisma.payment.count({ where: { deletedAt: null } }),
+      this.prisma.payment.count({
+        where: {
+          deletedAt: null,
+          ...(projectIds === null
+            ? {}
+            : {
+                OR: [
+                  { projectId: { in: projectIds } },
+                  { invoice: { is: { projectId: { in: projectIds } } } },
+                ],
+              }),
+        },
+      }),
     ]);
 
     const totalExpensePaid = money(costs.actualCosts);

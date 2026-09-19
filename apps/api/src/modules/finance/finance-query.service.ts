@@ -1,17 +1,41 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { aggregateCosts, money } from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Scalable finance reads — prefer Prisma aggregate/groupBy, then map through
  * the canonical cost policy (invoice-wins) for actual costs.
+ *
+ * Optional `projectIds`:
+ * - `null` (default) = company-wide (no project filter)
+ * - `string[]` = restrict to those project ids (empty → empty/zero results)
  */
 @Injectable()
 export class FinanceQueryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async loadCostRows(projectId?: string) {
-    const projectFilter = projectId ? { projectId } : {};
+  private projectIdFilter(
+    projectIds: string[] | null,
+  ): { projectId: { in: string[] } } | Record<string, never> {
+    if (projectIds === null) return {};
+    return { projectId: { in: projectIds } };
+  }
+
+  private paymentScope(projectIds: string[] | null): Prisma.PaymentWhereInput {
+    if (projectIds === null) return {};
+    return {
+      OR: [
+        { projectId: { in: projectIds } },
+        { invoice: { is: { projectId: { in: projectIds } } } },
+      ],
+    };
+  }
+
+  async loadCostRows(projectId?: string, projectIds: string[] | null = null) {
+    const projectFilter = projectId
+      ? { projectId }
+      : this.projectIdFilter(projectIds);
 
     const [expenses, supplierInvoices] = await Promise.all([
       this.prisma.expense.findMany({
@@ -69,8 +93,8 @@ export class FinanceQueryService {
     };
   }
 
-  async companyCostTotals() {
-    const rows = await this.loadCostRows();
+  async companyCostTotals(projectIds: string[] | null = null) {
+    const rows = await this.loadCostRows(undefined, projectIds);
     return aggregateCosts(rows);
   }
 
@@ -79,43 +103,68 @@ export class FinanceQueryService {
     return aggregateCosts(rows);
   }
 
-  async customerRevenuePaid(): Promise<string> {
+  async customerRevenuePaid(
+    projectIds: string[] | null = null,
+  ): Promise<string> {
     const result = await this.prisma.invoice.aggregate({
       where: {
         deletedAt: null,
         type: 'CUSTOMER',
         status: { notIn: ['CANCELLED', 'DRAFT'] },
+        ...this.projectIdFilter(projectIds),
       },
       _sum: { paidAmount: true },
     });
     return (result._sum.paidAmount ?? money(0)).toDecimalPlaces(4).toFixed(4);
   }
 
-  async outstandingByType(type: 'CUSTOMER' | 'SUPPLIER'): Promise<string> {
+  async outstandingByType(
+    type: 'CUSTOMER' | 'SUPPLIER',
+    projectIds: string[] | null = null,
+  ): Promise<string> {
     // Sum remaining balance in SQL — avoids loading all open invoices into memory.
-    const rows = await this.prisma.$queryRaw<Array<{ outstanding: string }>>`
-      SELECT COALESCE(SUM(GREATEST("grossAmount" - "paidAmount", 0)), 0)::text AS outstanding
-      FROM "invoices"
-      WHERE "deletedAt" IS NULL
-        AND "type" = ${type}::"InvoiceType"
-        AND "status" IN ('SENT', 'OPEN', 'PARTIALLY_PAID', 'OVERDUE')
-    `;
+    if (projectIds !== null && projectIds.length === 0) {
+      return money(0).toDecimalPlaces(4).toFixed(4);
+    }
+
+    const rows =
+      projectIds === null
+        ? await this.prisma.$queryRaw<Array<{ outstanding: string }>>`
+            SELECT COALESCE(SUM(GREATEST("grossAmount" - "paidAmount", 0)), 0)::text AS outstanding
+            FROM "invoices"
+            WHERE "deletedAt" IS NULL
+              AND "type" = ${type}::"InvoiceType"
+              AND "status" IN ('SENT', 'OPEN', 'PARTIALLY_PAID', 'OVERDUE')
+          `
+        : await this.prisma.$queryRaw<Array<{ outstanding: string }>>`
+            SELECT COALESCE(SUM(GREATEST("grossAmount" - "paidAmount", 0)), 0)::text AS outstanding
+            FROM "invoices"
+            WHERE "deletedAt" IS NULL
+              AND "type" = ${type}::"InvoiceType"
+              AND "status" IN ('SENT', 'OPEN', 'PARTIALLY_PAID', 'OVERDUE')
+              AND "projectId" IN (${Prisma.join(projectIds)})
+          `;
     return money(rows[0]?.outstanding ?? 0)
       .toDecimalPlaces(4)
       .toFixed(4);
   }
 
-  async projectKpis() {
+  async projectKpis(projectIds: string[] | null = null) {
+    const projectWhere: Prisma.ProjectWhereInput = {
+      deletedAt: null,
+      ...(projectIds === null ? {} : { id: { in: projectIds } }),
+    };
+
     const [activeCount, valueAgg, budgetAgg] = await Promise.all([
       this.prisma.project.count({
-        where: { deletedAt: null, status: 'ACTIVE' },
+        where: { ...projectWhere, status: 'ACTIVE' },
       }),
       this.prisma.project.aggregate({
-        where: { deletedAt: null },
+        where: projectWhere,
         _sum: { contractValue: true },
       }),
       this.prisma.project.aggregate({
-        where: { deletedAt: null },
+        where: projectWhere,
         _sum: { currentBudget: true },
       }),
     ]);
@@ -131,14 +180,15 @@ export class FinanceQueryService {
     };
   }
 
-  async cashFlowTotals() {
+  async cashFlowTotals(projectIds: string[] | null = null) {
+    const scope = this.paymentScope(projectIds);
     const [incoming, outgoing] = await Promise.all([
       this.prisma.payment.aggregate({
-        where: { deletedAt: null, type: 'INCOMING' },
+        where: { deletedAt: null, type: 'INCOMING', ...scope },
         _sum: { amount: true },
       }),
       this.prisma.payment.aggregate({
-        where: { deletedAt: null, type: 'OUTGOING' },
+        where: { deletedAt: null, type: 'OUTGOING', ...scope },
         _sum: { amount: true },
       }),
     ]);
@@ -154,9 +204,9 @@ export class FinanceQueryService {
   /**
    * Monthly cash totals — select only needed payment columns (no nested entity loads).
    */
-  async monthlyCashFlow(months: string[]) {
+  async monthlyCashFlow(months: string[], projectIds: string[] | null = null) {
     const payments = await this.prisma.payment.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, ...this.paymentScope(projectIds) },
       select: { amount: true, type: true, paymentDate: true },
     });
 
@@ -186,10 +236,13 @@ export class FinanceQueryService {
     });
   }
 
-  async invoiceStatusDistribution() {
+  async invoiceStatusDistribution(projectIds: string[] | null = null) {
     const groups = await this.prisma.invoice.groupBy({
       by: ['status'],
-      where: { deletedAt: null },
+      where: {
+        deletedAt: null,
+        ...this.projectIdFilter(projectIds),
+      },
       _count: { _all: true },
     });
     return groups.map((row) => ({
@@ -198,9 +251,12 @@ export class FinanceQueryService {
     }));
   }
 
-  async projectProfitabilityRows() {
+  async projectProfitabilityRows(projectIds: string[] | null = null) {
     const projects = await this.prisma.project.findMany({
-      where: { deletedAt: null },
+      where: {
+        deletedAt: null,
+        ...(projectIds === null ? {} : { id: { in: projectIds } }),
+      },
       select: {
         id: true,
         name: true,
@@ -219,11 +275,12 @@ export class FinanceQueryService {
           deletedAt: null,
           type: 'CUSTOMER',
           status: { notIn: ['CANCELLED', 'DRAFT'] },
-          projectId: { not: null },
+          projectId:
+            projectIds === null ? { not: null } : { in: projectIds },
         },
         _sum: { paidAmount: true },
       }),
-      this.loadCostRows(),
+      this.loadCostRows(undefined, projectIds),
     ]);
 
     const revenueByProject = new Map(

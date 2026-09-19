@@ -1,7 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
+import type { AuthUserDto } from '@fbm/shared';
 import { money } from '@fbm/financial-core';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NumberingService } from '../common/numbering.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -17,7 +19,7 @@ describe('PaymentsService concurrent overpayment guard', () => {
   let prisma: PrismaService;
   let invoiceId: string;
   let customerId: string;
-  let actorId: string;
+  let actor: AuthUserDto;
 
   beforeAll(async () => {
     process.env.DATABASE_URL ??=
@@ -28,6 +30,7 @@ describe('PaymentsService concurrent overpayment guard', () => {
         PaymentsService,
         PrismaService,
         NumberingService,
+        ProjectAccessService,
         {
           provide: BudgetsService,
           useValue: {
@@ -48,7 +51,7 @@ describe('PaymentsService concurrent overpayment guard', () => {
     await prisma.$connect();
 
     const stamp = Date.now();
-    const actor = await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         email: `pay-actor-${stamp}@example.com`,
         passwordHash: 'test-hash-not-used',
@@ -57,7 +60,13 @@ describe('PaymentsService concurrent overpayment guard', () => {
         role: 'ACCOUNTING',
       },
     });
-    actorId = actor.id;
+    actor = {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: 'ACCOUNTING',
+    };
 
     const customer = await prisma.customer.create({
       data: {
@@ -104,9 +113,9 @@ describe('PaymentsService concurrent overpayment guard', () => {
     if (customerId) {
       await prisma.customer.deleteMany({ where: { id: customerId } });
     }
-    if (actorId) {
-      await prisma.auditLog.deleteMany({ where: { actorId } });
-      await prisma.user.deleteMany({ where: { id: actorId } });
+    if (actor?.id) {
+      await prisma.auditLog.deleteMany({ where: { actorId: actor.id } });
+      await prisma.user.deleteMany({ where: { id: actor.id } });
     }
     await prisma.$disconnect();
   });
@@ -119,8 +128,8 @@ describe('PaymentsService concurrent overpayment guard', () => {
     };
 
     const results = await Promise.allSettled([
-      payments.create(payload, actorId),
-      payments.create(payload, actorId),
+      payments.create(payload, actor),
+      payments.create(payload, actor),
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');

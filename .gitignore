@@ -1,4 +1,4 @@
-﻿node_modules
+node_modules
 dist
 build
 .env
@@ -9,5 +9,7 @@ build
 coverage
 .turbo
 uploads
+backups
+.tmp-*.txt
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal

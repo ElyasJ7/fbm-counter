@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ExpenseStatus } from '@prisma/client';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +12,7 @@ describe('ExpensesService payment integrity (H4)', () => {
   let expenses: ExpensesService;
   let prisma: PrismaService;
   let expenseId: string;
-  let actorId: string;
+  let actor: AuthUserDto;
 
   beforeAll(async () => {
     process.env.DATABASE_URL ??=
@@ -20,6 +22,7 @@ describe('ExpensesService payment integrity (H4)', () => {
       providers: [
         ExpensesService,
         PrismaService,
+        ProjectAccessService,
         {
           provide: BudgetsService,
           useValue: {
@@ -40,10 +43,16 @@ describe('ExpensesService payment integrity (H4)', () => {
     prisma = moduleRef.get(PrismaService);
     await prisma.$connect();
 
-    const actor = await prisma.user.findFirst({
+    const admin = await prisma.user.findFirst({
       where: { role: 'ADMIN', deletedAt: null },
     });
-    actorId = actor!.id;
+    actor = {
+      id: admin!.id,
+      email: admin!.email,
+      firstName: admin!.firstName,
+      lastName: admin!.lastName,
+      role: 'ADMIN',
+    };
 
     const row = await prisma.expense.create({
       data: {
@@ -69,13 +78,13 @@ describe('ExpensesService payment integrity (H4)', () => {
 
   it('rejects negative payment amounts', async () => {
     await expect(
-      expenses.recordPayment(expenseId, { amount: '-10' }, actorId),
+      expenses.recordPayment(expenseId, { amount: '-10' }, actor),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects payment that would exceed gross', async () => {
     await expect(
-      expenses.recordPayment(expenseId, { amount: '200' }, actorId),
+      expenses.recordPayment(expenseId, { amount: '200' }, actor),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -83,7 +92,7 @@ describe('ExpensesService payment integrity (H4)', () => {
     const result = await expenses.recordPayment(
       expenseId,
       { amount: '50' },
-      actorId,
+      actor,
     );
     expect(Number(result.paidAmount)).toBe(50);
     expect(result.status).toBe(ExpenseStatus.PARTIALLY_PAID);
@@ -97,7 +106,7 @@ describe('ExpensesService payment integrity (H4)', () => {
         // @ts-expect-error — client must not be able to set paidAmount
         paidAmount: '999',
       } as never,
-      actorId,
+      actor,
     );
     expect(Number(updated.paidAmount)).toBe(50);
   });

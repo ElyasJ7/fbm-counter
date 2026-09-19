@@ -12,6 +12,8 @@ import {
   assertValidExpensePaidAmount,
   resolveExpenseStatus,
 } from '@fbm/financial-core';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -30,6 +32,7 @@ export class ExpensesService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly budgets: BudgetsService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private decimalToString(value: Prisma.Decimal | string | number): string {
@@ -115,19 +118,23 @@ export class ExpensesService {
     }
   }
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    projectId?: string;
-    status?: ExpenseStatus;
-  }) {
+  async findAll(
+    params: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      projectId?: string;
+      status?: ExpenseStatus;
+    },
+    user: AuthUserDto,
+  ) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const search = params.search?.trim();
 
     const where: Prisma.ExpenseWhereInput = {
       deletedAt: null,
+      AND: [this.projectAccess.expenseWhere(user)],
       ...(params.projectId ? { projectId: params.projectId } : {}),
       ...(params.status ? { status: params.status } : {}),
       ...(search
@@ -163,7 +170,8 @@ export class ExpensesService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessExpense(user, id);
     const expense = await this.prisma.expense.findFirst({
       where: { id, deletedAt: null },
       include: expenseInclude,
@@ -191,7 +199,12 @@ export class ExpensesService {
     return this.serialize(expense);
   }
 
-  async create(dto: CreateExpenseDto, actorId: string) {
+  async create(dto: CreateExpenseDto, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessOptionalProject(
+      user,
+      dto.projectId,
+    );
     await this.assertProject(dto.projectId);
     await this.assertSupplier(dto.supplierId);
 
@@ -262,7 +275,9 @@ export class ExpensesService {
     return created;
   }
 
-  async update(id: string, dto: UpdateExpenseDto, actorId: string) {
+  async update(id: string, dto: UpdateExpenseDto, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessExpense(user, id);
     const existing = await this.prisma.expense.findFirst({
       where: { id, deletedAt: null },
     });
@@ -271,6 +286,10 @@ export class ExpensesService {
     }
 
     if (dto.projectId !== undefined) {
+      await this.projectAccess.assertCanAccessOptionalProject(
+        user,
+        dto.projectId,
+      );
       await this.assertProject(dto.projectId);
     }
     if (dto.supplierId !== undefined) {
@@ -400,8 +419,10 @@ export class ExpensesService {
   async recordPayment(
     id: string,
     dto: RecordExpensePaymentDto,
-    actorId: string,
+    user: AuthUserDto,
   ) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessExpense(user, id);
     const existing = await this.prisma.expense.findFirst({
       where: { id, deletedAt: null },
       include: expenseInclude,
@@ -470,7 +491,9 @@ export class ExpensesService {
     return updated;
   }
 
-  async approve(id: string, actorId: string) {
+  async approve(id: string, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessExpense(user, id);
     const existing = await this.prisma.expense.findFirst({
       where: { id, deletedAt: null },
       include: expenseInclude,
@@ -550,7 +573,9 @@ export class ExpensesService {
     return approved;
   }
 
-  async remove(id: string, actorId: string) {
+  async remove(id: string, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessExpense(user, id);
     const existing = await this.prisma.expense.findFirst({
       where: { id, deletedAt: null },
     });

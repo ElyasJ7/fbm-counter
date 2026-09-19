@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { BUDGET_CATEGORY_LABELS } from '@fbm/shared';
+import type { AuthUserDto } from '@fbm/shared';
 import { aggregateCosts, computeBudgetLine, money } from '@fbm/financial-core';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertBudgetLinesDto } from './dto/upsert-budget-lines.dto';
@@ -11,6 +13,7 @@ export class BudgetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private async assertProject(projectId: string) {
@@ -192,7 +195,12 @@ export class BudgetsService {
     }
   }
 
-  async listForProject(projectId: string, syncFromExpenses = false) {
+  async listForProject(
+    projectId: string,
+    syncFromExpenses = false,
+    user: AuthUserDto,
+  ) {
+    await this.projectAccess.assertCanAccessProject(user, projectId);
     await this.assertProject(projectId);
 
     if (syncFromExpenses) {
@@ -212,8 +220,10 @@ export class BudgetsService {
   async upsertForProject(
     projectId: string,
     dto: UpsertBudgetLinesDto,
-    actorId: string,
+    user: AuthUserDto,
   ) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessProject(user, projectId);
     await this.assertProject(projectId);
 
     return this.prisma.$transaction(async (tx) => {

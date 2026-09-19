@@ -7,6 +7,7 @@ import {
   ProjectStatus,
 } from '@prisma/client';
 import { aggregateCosts } from '@fbm/financial-core';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceQueryService } from '../finance/finance-query.service';
@@ -21,6 +22,13 @@ describe('Budget sync vs project overview actuals', () => {
   let customerId: string;
   let actorId: string;
   let expenseId: string;
+  let actorUser: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: 'ACCOUNTING';
+  };
 
   beforeAll(async () => {
     process.env.DATABASE_URL ??=
@@ -32,6 +40,7 @@ describe('Budget sync vs project overview actuals', () => {
         ProjectFinanceService,
         FinanceQueryService,
         PrismaService,
+        ProjectAccessService,
         {
           provide: NotificationsService,
           useValue: {
@@ -59,6 +68,13 @@ describe('Budget sync vs project overview actuals', () => {
       },
     });
     actorId = actor.id;
+    actorUser = {
+      id: actor.id,
+      email: actor.email,
+      firstName: actor.firstName,
+      lastName: actor.lastName,
+      role: 'ACCOUNTING',
+    };
 
     const customer = await prisma.customer.create({
       data: { companyName: `Budget Sync Co ${stamp}` },
@@ -129,7 +145,7 @@ describe('Budget sync vs project overview actuals', () => {
 
     await budgets.syncAndNotifyOverruns(projectId, actorId);
 
-    let lines = await budgets.listForProject(projectId, false);
+    let lines = await budgets.listForProject(projectId, false, actorUser);
     let other = lines.data.find((l) => l.category === 'OTHER');
     let overview = await finance.getOverview(projectId);
 
@@ -142,7 +158,7 @@ describe('Budget sync vs project overview actuals', () => {
     });
     await budgets.syncAndNotifyOverruns(projectId, actorId);
 
-    lines = await budgets.listForProject(projectId, false);
+    lines = await budgets.listForProject(projectId, false, actorUser);
     other = lines.data.find((l) => l.category === 'OTHER');
     overview = await finance.getOverview(projectId);
     expect(other?.actualAmount).toBe('50.0000');
@@ -165,7 +181,7 @@ describe('Budget sync vs project overview actuals', () => {
     });
     await budgets.syncAndNotifyOverruns(projectId, actorId);
 
-    lines = await budgets.listForProject(projectId, false);
+    lines = await budgets.listForProject(projectId, false, actorUser);
     other = lines.data.find((l) => l.category === 'OTHER');
     overview = await finance.getOverview(projectId);
 
@@ -197,7 +213,7 @@ describe('Budget sync vs project overview actuals', () => {
     });
     await budgets.syncAndNotifyOverruns(projectId, actorId);
 
-    lines = await budgets.listForProject(projectId, false);
+    lines = await budgets.listForProject(projectId, false, actorUser);
     other = lines.data.find((l) => l.category === 'OTHER');
     overview = await finance.getOverview(projectId);
     expect(other?.actualAmount).toBe('238.0000');

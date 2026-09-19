@@ -27,9 +27,16 @@ describe('FinanceQueryService cost consistency', () => {
   it('company cost totals match aggregateCosts on the same rows', async () => {
     const rows = await financeQuery.loadCostRows();
     const expected = aggregateCosts(rows);
-    const actual = await financeQuery.companyCostTotals();
-    expect(actual.actualCosts).toBe(expected.actualCosts);
-    expect(actual.accountsPayable).toBe(expected.accountsPayable);
+    const loadSpy = jest
+      .spyOn(financeQuery, 'loadCostRows')
+      .mockResolvedValue(rows);
+    try {
+      const actual = await financeQuery.companyCostTotals();
+      expect(actual.actualCosts).toBe(expected.actualCosts);
+      expect(actual.accountsPayable).toBe(expected.accountsPayable);
+    } finally {
+      loadSpy.mockRestore();
+    }
   });
 
   it('loads lean cost rows for larger sets without nested entity graphs', async () => {

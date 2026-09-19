@@ -24,31 +24,35 @@ export class ExpensesController {
   @Get()
   @RequirePermissions('expenses:read')
   findAll(
+    @CurrentUser() user: AuthUserDto,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
     @Query('projectId') projectId?: string,
     @Query('status') status?: ExpenseStatus,
   ) {
-    return this.expensesService.findAll({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      search,
-      projectId,
-      status,
-    });
+    return this.expensesService.findAll(
+      {
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+        search,
+        projectId,
+        status,
+      },
+      user,
+    );
   }
 
   @Get(':id')
   @RequirePermissions('expenses:read')
-  findOne(@Param('id') id: string) {
-    return this.expensesService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
+    return this.expensesService.findOne(id, user);
   }
 
   @Post()
   @RequirePermissions('expenses:write')
   create(@Body() dto: CreateExpenseDto, @CurrentUser() user: AuthUserDto) {
-    return this.expensesService.create(dto, user.id);
+    return this.expensesService.create(dto, user);
   }
 
   @Patch(':id')
@@ -58,7 +62,7 @@ export class ExpensesController {
     @Body() dto: UpdateExpenseDto,
     @CurrentUser() user: AuthUserDto,
   ) {
-    return this.expensesService.update(id, dto, user.id);
+    return this.expensesService.update(id, dto, user);
   }
 
   @Post(':id/payments')
@@ -68,19 +72,19 @@ export class ExpensesController {
     @Body() dto: RecordExpensePaymentDto,
     @CurrentUser() user: AuthUserDto,
   ) {
-    return this.expensesService.recordPayment(id, dto, user.id);
+    return this.expensesService.recordPayment(id, dto, user);
   }
 
   /** Approval is a distinct financial control — not covered by expenses:write. */
   @Patch(':id/approve')
   @RequirePermissions('finances:approve')
   approve(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    return this.expensesService.approve(id, user.id);
+    return this.expensesService.approve(id, user);
   }
 
   @Delete(':id')
   @RequirePermissions('expenses:write')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    return this.expensesService.remove(id, user.id);
+    return this.expensesService.remove(id, user);
   }
 }

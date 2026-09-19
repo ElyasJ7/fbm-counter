@@ -6,11 +6,15 @@
 - `SameSite`: `COOKIE_SAME_SITE` (`lax` default, `strict` allowed)
 - `Secure`: `COOKIE_SECURE` or auto-true when `NODE_ENV=production`
 
-### CSRF assumptions
+## CSRF assumptions (final decision)
 
-With `SameSite=lax` or `strict`, cross-site browser POSTs do not include cookies in typical CSRF scenarios.
+Production stays **same-site** with `SameSite=lax` (or `strict`).
 
-**`COOKIE_SAME_SITE=none` is rejected at startup** until explicit CSRF tokens (double-submit or synchronizer) are implemented.
+Cross-site browser POSTs do not include cookies in typical CSRF scenarios under Lax/Strict.
+
+**`COOKIE_SAME_SITE=none` remains rejected** at startup (`AuthConfigValidator` + `ProductionConfigValidator`) until explicit CSRF tokens (double-submit or synchronizer) are implemented.
+
+Do not enable `SameSite=None` without that protection.
 
 ## Rate limiting
 

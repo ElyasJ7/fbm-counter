@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, SubcontractorTrade } from '@prisma/client';
 import { money } from '@fbm/financial-core';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AssignProjectDto } from './dto/assign-project.dto';
 import type { CreateSubcontractorDto } from './dto/create-subcontractor.dto';
@@ -20,7 +22,10 @@ const OPEN_INVOICE_STATUSES = [
 
 @Injectable()
 export class SubcontractorsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectAccess: ProjectAccessService,
+  ) {}
 
   private moneyStr(value: ReturnType<typeof money>) {
     return value.toDecimalPlaces(4).toFixed(4);
@@ -110,7 +115,9 @@ export class SubcontractorsService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
+    const invoiceAccess = this.projectAccess.invoiceWhere(user);
+
     const subcontractor = await this.prisma.subcontractor.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -128,7 +135,7 @@ export class SubcontractorsService {
           orderBy: { createdAt: 'desc' },
         },
         invoices: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, AND: [invoiceAccess] },
           orderBy: { issueDate: 'desc' },
           take: 50,
           include: {
@@ -149,6 +156,7 @@ export class SubcontractorsService {
         subcontractorId: id,
         deletedAt: null,
         status: { not: 'CANCELLED' },
+        AND: [invoiceAccess],
       },
       select: { status: true, grossAmount: true, paidAmount: true },
     });

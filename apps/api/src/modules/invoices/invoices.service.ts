@@ -12,6 +12,8 @@ import {
   resolveInvoiceStatus,
   toDateOnlyString,
 } from '@fbm/financial-core';
+import type { AuthUserDto } from '@fbm/shared';
+import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BudgetsService } from '../budgets/budgets.service';
@@ -49,6 +51,7 @@ export class InvoicesService {
     private readonly notifications: NotificationsService,
     private readonly budgets: BudgetsService,
     private readonly numbering: NumberingService,
+    private readonly projectAccess: ProjectAccessService,
   ) {}
 
   private async syncBudgetForInvoice(input: {
@@ -288,20 +291,24 @@ export class InvoicesService {
     }
   }
 
-  async findAll(params: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    type?: InvoiceType;
-    projectId?: string;
-    status?: InvoiceStatus;
-  }) {
+  async findAll(
+    params: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      type?: InvoiceType;
+      projectId?: string;
+      status?: InvoiceStatus;
+    },
+    user: AuthUserDto,
+  ) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const search = params.search?.trim();
 
     const where: Prisma.InvoiceWhereInput = {
       deletedAt: null,
+      AND: [this.projectAccess.invoiceWhere(user)],
       ...(params.type ? { type: params.type } : {}),
       ...(params.projectId ? { projectId: params.projectId } : {}),
       ...(params.status ? { status: params.status } : {}),
@@ -337,7 +344,8 @@ export class InvoicesService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessInvoice(user, id);
     const invoice = await this.prisma.invoice.findFirst({
       where: { id, deletedAt: null },
       include: invoiceInclude,
@@ -366,7 +374,8 @@ export class InvoicesService {
     return this.serialize(invoice);
   }
 
-  async renderPdf(id: string) {
+  async renderPdf(id: string, user: AuthUserDto) {
+    await this.projectAccess.assertCanAccessInvoice(user, id);
     const invoice = await this.prisma.invoice.findFirst({
       where: { id, deletedAt: null },
       include: invoiceInclude,
@@ -423,7 +432,12 @@ export class InvoicesService {
     };
   }
 
-  async create(dto: CreateInvoiceDto, actorId: string) {
+  async create(dto: CreateInvoiceDto, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessOptionalProject(
+      user,
+      dto.projectId,
+    );
     await this.validateParty(
       dto.type,
       dto.customerId,
@@ -545,7 +559,9 @@ export class InvoicesService {
     return created;
   }
 
-  async update(id: string, dto: UpdateInvoiceDto, actorId: string) {
+  async update(id: string, dto: UpdateInvoiceDto, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessInvoice(user, id);
     const existing = await this.prisma.invoice.findFirst({
       where: { id, deletedAt: null },
     });
@@ -576,6 +592,10 @@ export class InvoicesService {
 
     await this.validateParty(type, customerId, supplierId, subcontractorId);
     if (dto.projectId !== undefined) {
+      await this.projectAccess.assertCanAccessOptionalProject(
+        user,
+        dto.projectId,
+      );
       await this.assertProject(dto.projectId);
     }
 
@@ -713,7 +733,9 @@ export class InvoicesService {
     return updated;
   }
 
-  async remove(id: string, actorId: string) {
+  async remove(id: string, user: AuthUserDto) {
+    const actorId = user.id;
+    await this.projectAccess.assertCanAccessInvoice(user, id);
     const existing = await this.prisma.invoice.findFirst({
       where: { id, deletedAt: null },
     });

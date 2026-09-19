@@ -23,7 +23,12 @@ Connection: see `DATABASE_URL` in `apps/api/.env` (never commit secrets)
 **Logical backup (custom format):**
 
 ```bash
-# From host — container must be running
+# Cross-platform scripts (preferred)
+./scripts/backup-postgres.sh
+# Windows PowerShell:
+#   .\scripts\backup-postgres.ps1
+
+# Or manual:
 docker exec -t fbm-postgres pg_dump -U fbm -d fbm_counter -Fc -f /tmp/fbm_counter.dump
 docker cp fbm-postgres:/tmp/fbm_counter.dump ./backups/fbm_counter-$(date +%Y%m%d).dump
 ```
@@ -33,6 +38,16 @@ docker cp fbm-postgres:/tmp/fbm_counter.dump ./backups/fbm_counter-$(date +%Y%m%
 ```bash
 docker exec -t fbm-postgres pg_dump -U fbm -d fbm_counter > ./backups/fbm_counter-$(date +%Y%m%d).sql
 ```
+
+**Restore drill (isolated DB — never production):**
+
+```bash
+./scripts/restore-postgres-drill.sh ./backups/fbm_counter-YYYYMMDD.dump
+# Windows:
+#   .\scripts\restore-postgres-drill.ps1 -DumpFile .\backups\fbm_counter-YYYYMMDD.dump
+```
+
+See `docs/backup-restore-drill.md` for pass criteria and RPO/RTO placeholders.
 
 **Restore (destructive — empty/replace target DB only):**
 
