@@ -13,19 +13,19 @@ describe('date-only safety', () => {
     assert.equal(toDateOnlyString('2026-09-17'), '2026-09-17');
   });
 
-  it('formats for de-DE without shifting day', () => {
-    assert.equal(formatDateOnlyDe('2026-09-17'), '17.09.2026');
+  it('formats for en-US without shifting day', () => {
+    assert.equal(formatDateOnlyDe('2026-09-17'), 'Sep 17, 2026');
   });
 
   it('handles month boundaries', () => {
-    assert.equal(formatDateOnlyDe('2026-03-01'), '01.03.2026');
-    assert.equal(formatDateOnlyDe('2026-02-28'), '28.02.2026');
+    assert.equal(formatDateOnlyDe('2026-03-01'), 'Mar 1, 2026');
+    assert.equal(formatDateOnlyDe('2026-02-28'), 'Feb 28, 2026');
   });
 
   it('handles CET/CEST DST boundary dates without shift', () => {
     // EU DST spring 2026-03-29, autumn 2026-10-25
-    assert.equal(formatDateOnlyDe('2026-03-29'), '29.03.2026');
-    assert.equal(formatDateOnlyDe('2026-10-25'), '25.10.2026');
+    assert.equal(formatDateOnlyDe('2026-03-29'), 'Mar 29, 2026');
+    assert.equal(formatDateOnlyDe('2026-10-25'), 'Oct 25, 2026');
   });
 
   it('stores UTC noon for persistence', () => {

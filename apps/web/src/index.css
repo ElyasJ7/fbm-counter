@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /*
-  FBM Counter — Design tokens (Stage 1)
-  Professional light theme for construction finance B2B SaaS.
+  FBM Counter — Design tokens
+  Premium light theme for construction finance B2B SaaS.
 */
 
 @theme {
@@ -11,38 +11,49 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
 
   /* Surfaces */
-  --color-background: #f3f5f7;
-  --color-surface: #f3f5f7;
+  --color-background: #f6f8fb;
+  --color-surface: #f8fafc;
+  --color-sidebar: #f3f7f9;
   --color-panel: #ffffff;
   --color-elevated: #ffffff;
   --color-ink: #0f172a;
-  --color-muted: #475569;
+  --color-muted: #334155;
   --color-subtle: #64748b;
   --color-border: #e2e8f0;
   --color-border-strong: #cbd5e1;
 
   /* Brand / actions */
-  --color-brand: #0f4c5c;
-  --color-brand-hover: #0c3d4a;
-  --color-brand-soft: #e8f2f4;
-  --color-accent: #c2410c;
+  --color-brand: #0f5d73;
+  --color-brand-hover: #0c4a5b;
+  --color-brand-soft: #e6f4f7;
+  --color-accent: #d97706;
 
   /* Semantic */
   --color-success: #15803d;
-  --color-success-soft: #ecfdf5;
-  --color-warning: #b45309;
-  --color-warning-soft: #fffbeb;
-  --color-danger: #b91c1c;
-  --color-danger-soft: #fef2f2;
-  --color-info: #0369a1;
-  --color-info-soft: #f0f9ff;
+  --color-success-soft: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-soft: #fee2e2;
+  --color-info: #2563eb;
+  --color-info-soft: #dbeafe;
+
+  /* Chart series (non-token utilities still reference hex in JS) */
+  --color-chart-inflow: #15803d;
+  --color-chart-outflow: #dc2626;
+  --color-chart-materials: #d97706;
+  --color-chart-2: #0f5d73;
+  --color-chart-3: #2563eb;
+  --color-chart-4: #7c3aed;
+  --color-chart-5: #475569;
 
   /* Radii */
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
 
-  /* Shadows */
+  /* Shadows — keep subtle */
   --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.06);
 }
@@ -72,6 +83,14 @@
   *:focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+  }
+
+  a:not([class]) {
+    color: var(--color-brand);
+  }
+
+  a:not([class]):hover {
+    color: var(--color-brand-hover);
   }
 
   /* Prefer larger tap targets on coarse pointers */
@@ -128,7 +147,7 @@
   }
 
   .text-table-header {
-    @apply text-xs font-semibold uppercase tracking-wide text-muted;
+    @apply text-xs font-semibold uppercase tracking-wide text-subtle;
   }
 
   .tabular-money {
@@ -141,7 +160,7 @@
     @apply placeholder:text-subtle;
     @apply hover:border-border-strong;
     @apply focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
-    @apply disabled:cursor-not-allowed disabled:bg-background disabled:text-subtle;
+    @apply disabled:cursor-not-allowed disabled:bg-surface disabled:text-subtle;
   }
 
   .field-control-error {

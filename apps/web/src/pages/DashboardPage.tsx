@@ -48,12 +48,13 @@ import { cn } from '../lib/cn';
 import { fetchAuditLogs } from '../services/audit';
 import { fetchDashboard } from '../services/dashboard';
 import { fetchInvoices } from '../services/finance';
+import { CHART_PALETTE } from '../lib/chart-colors';
 
 const CHART = {
-  inflow: '#0f4c5c',
-  outflow: '#c2410c',
-  grid: '#e2e8f0',
-  tick: '#64748b',
+  inflow: CHART_PALETTE.inflow,
+  outflow: CHART_PALETTE.outflow,
+  grid: CHART_PALETTE.grid,
+  tick: CHART_PALETTE.tick,
 };
 
 const OUTSTANDING_STATUSES = new Set<InvoiceStatus>([
@@ -66,7 +67,7 @@ const OUTSTANDING_STATUSES = new Set<InvoiceStatus>([
 function formatMonthLabel(month: string) {
   const [year, m] = month.split('-');
   const date = new Date(Number(year), Number(m) - 1, 1);
-  return new Intl.DateTimeFormat('de-DE', {
+  return new Intl.DateTimeFormat('en-GB', {
     month: 'short',
     year: '2-digit',
   }).format(date);
@@ -408,7 +409,7 @@ export function DashboardPage() {
           }
           hint="Customer invoice payments received"
           icon={<ArrowDownLeft className="h-4 w-4" />}
-          tone="brand"
+          tone="success"
           to={canReadInvoices ? '/payments' : undefined}
         />
         <DashboardKpiCard
@@ -418,7 +419,7 @@ export function DashboardPage() {
           }
           hint="Paid costs (invoice-wins policy)"
           icon={<Receipt className="h-4 w-4" />}
-          tone="default"
+          tone="warning"
         />
         <DashboardKpiCard
           label="Accounts receivable"
@@ -449,6 +450,7 @@ export function DashboardPage() {
           }
           hint="Open supplier invoices"
           icon={<Landmark className="h-4 w-4" />}
+          tone="warning"
           to={canReadInvoices ? '/invoices?type=SUPPLIER' : undefined}
         />
       </div>
@@ -500,6 +502,7 @@ export function DashboardPage() {
           }
           hint="All inflows − all outflows"
           icon={<ArrowUpRight className="h-4 w-4" />}
+          tone="info"
         />
       </div>
 
@@ -592,10 +595,10 @@ export function DashboardPage() {
                     key={row.status}
                     className={cn(
                       'h-full',
-                      row.status === 'ACTIVE' && 'bg-brand',
+                      row.status === 'ACTIVE' && 'bg-success',
                       row.status === 'PLANNING' && 'bg-info',
                       row.status === 'ON_HOLD' && 'bg-warning',
-                      row.status === 'COMPLETED' && 'bg-success',
+                      row.status === 'COMPLETED' && 'bg-brand',
                       row.status === 'CANCELLED' && 'bg-subtle',
                     )}
                     style={{

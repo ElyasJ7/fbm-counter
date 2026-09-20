@@ -41,7 +41,7 @@ describe('NotificationsService overdue dedupe', () => {
 
   it('does not create duplicate unread overdue notifications', async () => {
     const payload = {
-      title: 'Rechnung überfällig',
+      title: 'Invoice overdue',
       message: 'TEST-INV overdue',
       type: 'invoice.overdue',
       link: '/invoices',

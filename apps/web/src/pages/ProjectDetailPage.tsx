@@ -158,7 +158,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
         }));
       if (lines.length === 0) {
         throw new Error(
-          'Mindestens eine Budgetzeile mit Betrag erforderlich.',
+          'At least one budget line with an amount is required.',
         );
       }
       return saveProjectBudget(projectId, lines);
@@ -172,7 +172,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
       setError(
         err instanceof ApiError || err instanceof Error
           ? err.message
-          : 'Speichern fehlgeschlagen',
+          : 'Save failed',
       );
     },
   });
@@ -188,32 +188,32 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
   if (budgetQuery.error) {
     return (
       <EmptyState
-        title="Budget konnte nicht geladen werden"
+        title="Could not load budget"
         description={
           budgetQuery.error instanceof ApiError
             ? budgetQuery.error.message
-            : 'Unerwarteter Fehler'
+            : 'Unexpected error'
         }
       />
     );
   }
 
   return (
-    <Card title="Budget nach Kategorie">
+    <Card title="Budget by Category">
       <p className="mb-4 text-sm text-[var(--color-muted)]">
-        Geplante Beträge je Kostenkategorie. Ist- und gebunden Werte werden aus
-        Ausgaben synchronisiert.
+        Planned amounts by cost category. Actual and committed values are
+        synchronized from expenses.
       </p>
       <div className="table-scroll">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             <tr>
-              <th className="px-3 py-2 font-medium">Kategorie</th>
-              <th className="px-3 py-2 font-medium">Geplant</th>
-              <th className="px-3 py-2 font-medium">Gebunden</th>
-              <th className="px-3 py-2 font-medium">Ist</th>
-              <th className="px-3 py-2 font-medium">Rest</th>
-              <th className="px-3 py-2 font-medium">Notiz</th>
+              <th className="px-3 py-2 font-medium">Category</th>
+              <th className="px-3 py-2 font-medium">Planned</th>
+              <th className="px-3 py-2 font-medium">Committed</th>
+              <th className="px-3 py-2 font-medium">Actual</th>
+              <th className="px-3 py-2 font-medium">Remaining</th>
+              <th className="px-3 py-2 font-medium">Note</th>
             </tr>
           </thead>
           <tbody>
@@ -229,7 +229,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
                       <input
                         className="h-9 w-28 rounded-md border border-[var(--color-border)] bg-white px-2"
                         name={`planned-${line.category}`}
-                        aria-label={`Geplant ${BUDGET_CATEGORY_LABELS[line.category]}`}
+                        aria-label={`Planned ${BUDGET_CATEGORY_LABELS[line.category]}`}
                         value={line.plannedAmount}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -260,7 +260,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
                       <input
                         className="h-9 w-full min-w-40 rounded-md border border-[var(--color-border)] bg-white px-2"
                         name={`notes-${line.category}`}
-                        aria-label={`Notiz ${BUDGET_CATEGORY_LABELS[line.category]}`}
+                        aria-label={`Note ${BUDGET_CATEGORY_LABELS[line.category]}`}
                         value={line.notes}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -290,7 +290,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
             disabled={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
           >
-            Budget speichern
+            Save Budget
           </Button>
         </div>
       ) : null}
@@ -475,7 +475,7 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
     },
     onError: (error) => {
       setFormError(
-        error instanceof ApiError ? error.message : 'Zuweisung fehlgeschlagen',
+        error instanceof ApiError ? error.message : 'Assignment failed',
       );
     },
   });
@@ -501,11 +501,11 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
   if (linksQuery.error) {
     return (
       <EmptyState
-        title="Nachunternehmer konnten nicht geladen werden"
+        title="Could not load subcontractors"
         description={
           linksQuery.error instanceof ApiError
             ? linksQuery.error.message
-            : 'Unerwarteter Fehler'
+            : 'Unexpected error'
         }
       />
     );
@@ -514,24 +514,24 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-4">
       {canWrite ? (
-        <Card title="Nachunternehmer zuweisen">
+        <Card title="Assign subcontractors">
           <div className="grid gap-3 md:grid-cols-3">
             <Select
-              label="Nachunternehmer"
+              label="Subcontractor"
               name="subcontractorId"
               value={subcontractorId}
               onChange={(e) => setSubcontractorId(e.target.value)}
               options={availableOptions}
-              placeholder="Auswählen…"
+              placeholder="Select…"
             />
             <Input
-              label="Auftragswert"
+              label="Contract Value"
               name="contractValue"
               value={contractValue}
               onChange={(e) => setContractValue(e.target.value)}
             />
             <Input
-              label="Notiz"
+              label="Note"
               name="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -547,29 +547,29 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
               disabled={!subcontractorId || assignMutation.isPending}
               onClick={() => assignMutation.mutate()}
             >
-              Zuweisen
+              Assign
             </Button>
           </div>
         </Card>
       ) : null}
 
-      <Card title="Zugewiesene Nachunternehmer">
+      <Card title="Assigned subcontractors">
         {(linksQuery.data?.length ?? 0) === 0 ? (
           <EmptyState
-            title="Keine Nachunternehmer"
-            description="Weisen Sie Nachunternehmer diesem Projekt zu."
+            title="No subcontractors"
+            description="Assign subcontractors to this project."
           />
         ) : (
           <div className="table-scroll">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Firma</th>
-                  <th className="px-3 py-2 font-medium">Gewerk</th>
-                  <th className="px-3 py-2 font-medium">Auftragswert</th>
-                  <th className="px-3 py-2 font-medium">Kontakt</th>
+                  <th className="px-3 py-2 font-medium">Company</th>
+                  <th className="px-3 py-2 font-medium">Trade</th>
+                  <th className="px-3 py-2 font-medium">Contract Value</th>
+                  <th className="px-3 py-2 font-medium">Contact</th>
                   {canWrite ? (
-                    <th className="px-3 py-2 font-medium">Aktionen</th>
+                    <th className="px-3 py-2 font-medium">Actions</th>
                   ) : null}
                 </tr>
               </thead>
@@ -582,7 +582,7 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
                     <td className="px-3 py-3">
                       <Link
                         to={`/subcontractors/${link.subcontractor.id}`}
-                        className="font-medium text-[var(--color-accent)] hover:underline"
+                        className="font-medium text-brand hover:underline"
                       >
                         {link.subcontractor.companyName}
                       </Link>
@@ -611,14 +611,14 @@ function ProjectSubcontractorsTab({ projectId }: { projectId: string }) {
                           onClick={() => {
                             if (
                               window.confirm(
-                                `Zuweisung von „${link.subcontractor.companyName}“ entfernen?`,
+                                `Remove assignment of "${link.subcontractor.companyName}"?`,
                               )
                             ) {
                               unassignMutation.mutate(link.subcontractor.id);
                             }
                           }}
                         >
-                          Entfernen
+                          Remove
                         </Button>
                       </td>
                     ) : null}
@@ -647,8 +647,8 @@ function ProjectActivityTab({ projectId }: { projectId: string }) {
   if (!canRead) {
     return (
       <EmptyState
-        title="Kein Zugriff"
-        description="Audit-Aktivität ist nur für Verwaltung und Admins sichtbar."
+        title="No access"
+        description="Audit activity is only visible to management and admins."
       />
     );
   }
@@ -664,11 +664,11 @@ function ProjectActivityTab({ projectId }: { projectId: string }) {
   if (query.error) {
     return (
       <EmptyState
-        title="Aktivität konnte nicht geladen werden"
+        title="Could not load activity"
         description={
           query.error instanceof ApiError
             ? query.error.message
-            : 'Unerwarteter Fehler'
+            : 'Unexpected error'
         }
       />
     );
@@ -677,22 +677,22 @@ function ProjectActivityTab({ projectId }: { projectId: string }) {
   if ((query.data?.length ?? 0) === 0) {
     return (
       <EmptyState
-        title="Noch keine Aktivität"
-        description="Änderungen an diesem Projekt erscheinen hier."
+        title="No activity yet"
+        description="Changes to this project will appear here."
       />
     );
   }
 
   return (
-    <Card title="Aktivitätsprotokoll" description="Letzte 50 Ereignisse">
+    <Card title="Activity Log" description="Last 50 events">
       <div className="table-scroll">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-[var(--color-border)] text-[var(--color-muted)]">
             <tr>
-              <th className="px-3 py-2 font-medium">Zeitpunkt</th>
-              <th className="px-3 py-2 font-medium">Aktion</th>
-              <th className="px-3 py-2 font-medium">Objekt</th>
-              <th className="px-3 py-2 font-medium">Benutzer</th>
+              <th className="px-3 py-2 font-medium">Time</th>
+              <th className="px-3 py-2 font-medium">Action</th>
+              <th className="px-3 py-2 font-medium">Entity</th>
+              <th className="px-3 py-2 font-medium">User</th>
             </tr>
           </thead>
           <tbody>
@@ -1073,13 +1073,25 @@ export function ProjectDetailPage() {
       ) : null}
       {activeTab === 'budget' ? <ProjectBudgetTab projectId={project.id} /> : null}
       {activeTab === 'expenses' ? (
-        <ExpensesPage embeddedProjectId={project.id} compact />
+        <ExpensesPage
+          embeddedProjectId={project.id}
+          compact
+          currency={project.currency}
+        />
       ) : null}
       {activeTab === 'invoices' ? (
-        <InvoicesPage embeddedProjectId={project.id} compact />
+        <InvoicesPage
+          embeddedProjectId={project.id}
+          compact
+          currency={project.currency}
+        />
       ) : null}
       {activeTab === 'payments' ? (
-        <PaymentsPage embeddedProjectId={project.id} compact />
+        <PaymentsPage
+          embeddedProjectId={project.id}
+          compact
+          currency={project.currency}
+        />
       ) : null}
       {activeTab === 'subcontractors' ? (
         <ProjectSubcontractorsTab projectId={project.id} />

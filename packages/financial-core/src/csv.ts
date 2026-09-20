@@ -5,6 +5,7 @@
  * - Preserve ordinary numbers (including negatives like `-12.5`) as numeric text
  *   when the whole cell is a plain number.
  * - Quote fields that contain separators or special characters.
+ * - Default separator is comma (international / en-US).
  */
 
 const FORMULA_PREFIX = /^[=+\-@\t\r]/;
@@ -25,7 +26,7 @@ export function neutralizeCsvFormula(value: string): string {
 
 export function csvEscapeCell(
   value: string | number | null | undefined,
-  separator = ';',
+  separator = ',',
 ): string {
   const raw = value == null ? '' : String(value);
   const safe = neutralizeCsvFormula(raw);
@@ -41,7 +42,7 @@ export function csvEscapeCell(
 
 export function toCsvDocument(
   rows: Array<Array<string | number | null | undefined>>,
-  separator = ';',
+  separator = ',',
 ): string {
   const bom = '\uFEFF';
   const body = rows

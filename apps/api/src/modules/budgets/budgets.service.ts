@@ -186,8 +186,8 @@ export class BudgetsService {
         if (existing) continue;
 
         await this.notifications.createForUsers([userId], {
-          title: 'Budget überschritten',
-          message: `${project.projectNumber}: Kategorie ${categoryLabel} ist überzogen (Rest ${computed.remainingAmount}).`,
+          title: 'Budget exceeded',
+          message: `${project.projectNumber}: Category ${categoryLabel} is over budget (remaining ${computed.remainingAmount}).`,
           type,
           link,
         });

@@ -109,10 +109,10 @@ export class OverdueInvoicesJob {
 
         const projectLabel = invoice.project
           ? `${invoice.project.projectNumber} — ${invoice.project.name}`
-          : 'ohne Projekt';
+          : 'no project';
         const payload = {
-          title: 'Rechnung überfällig',
-          message: `${invoice.invoiceNumber} ist überfällig · ${projectLabel}`,
+          title: 'Invoice overdue',
+          message: `${invoice.invoiceNumber} is overdue · ${projectLabel}`,
           type: 'invoice.overdue',
           link: invoice.projectId
             ? `/projects/${invoice.projectId}?tab=invoices`

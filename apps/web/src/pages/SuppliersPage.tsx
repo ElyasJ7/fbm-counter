@@ -142,7 +142,7 @@ export function SuppliersPage() {
             }}
           >
             <Input
-              label="Firmenname"
+              label="Company Name"
               name="companyName"
               required
               value={form.companyName}
@@ -151,7 +151,7 @@ export function SuppliersPage() {
               }
             />
             <Input
-              label="Ansprechpartner"
+              label="Contact Person"
               name="contactPerson"
               value={form.contactPerson ?? ''}
               onChange={(e) =>
@@ -159,7 +159,7 @@ export function SuppliersPage() {
               }
             />
             <Input
-              label="E-Mail"
+              label="Email"
               name="email"
               type="email"
               value={form.email ?? ''}
@@ -168,7 +168,7 @@ export function SuppliersPage() {
               }
             />
             <Input
-              label="Telefon"
+              label="Phone"
               name="phone"
               value={form.phone ?? ''}
               onChange={(e) =>
@@ -176,7 +176,7 @@ export function SuppliersPage() {
               }
             />
             <Input
-              label="Straße"
+              label="Street"
               name="street"
               value={form.street ?? ''}
               onChange={(e) =>
@@ -185,7 +185,7 @@ export function SuppliersPage() {
             />
             <div className="grid grid-cols-2 gap-3">
               <Input
-                label="PLZ"
+                label="Postal Code"
                 name="postalCode"
                 value={form.postalCode ?? ''}
                 onChange={(e) =>
@@ -193,7 +193,7 @@ export function SuppliersPage() {
                 }
               />
               <Input
-                label="Stadt"
+                label="City"
                 name="city"
                 value={form.city ?? ''}
                 onChange={(e) =>
@@ -202,7 +202,7 @@ export function SuppliersPage() {
               />
             </div>
             <Input
-              label="USt-IdNr."
+              label="VAT ID"
               name="vatId"
               value={form.vatId ?? ''}
               onChange={(e) =>
@@ -218,7 +218,7 @@ export function SuppliersPage() {
               }
             />
             <Input
-              label="Zahlungsbedingungen"
+              label="Payment Terms"
               name="paymentTerms"
               value={form.paymentTerms ?? ''}
               onChange={(e) =>
@@ -232,14 +232,14 @@ export function SuppliersPage() {
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                Speichern
+                Save
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setShowForm(false)}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>

@@ -275,8 +275,7 @@ export class FinanceQueryService {
           deletedAt: null,
           type: 'CUSTOMER',
           status: { notIn: ['CANCELLED', 'DRAFT'] },
-          projectId:
-            projectIds === null ? { not: null } : { in: projectIds },
+          projectId: projectIds === null ? { not: null } : { in: projectIds },
         },
         _sum: { paidAmount: true },
       }),

@@ -262,7 +262,7 @@ export function SubcontractorDetailPage() {
             }}
           >
             <Input
-              label="Firmenname"
+              label="Company Name"
               name="companyName"
               required
               value={form.companyName}
@@ -273,7 +273,7 @@ export function SubcontractorDetailPage() {
               }
             />
             <Select
-              label="Gewerk"
+              label="Trade"
               name="trade"
               required
               value={form.trade}
@@ -287,7 +287,7 @@ export function SubcontractorDetailPage() {
               }
             />
             <Input
-              label="Ansprechpartner"
+              label="Contact Person"
               name="contactPerson"
               value={form.contactPerson ?? ''}
               onChange={(e) =>
@@ -297,7 +297,7 @@ export function SubcontractorDetailPage() {
               }
             />
             <Input
-              label="Vertragswert"
+              label="Contract Value"
               name="contractValue"
               value={form.contractValue ?? ''}
               onChange={(e) =>
@@ -307,7 +307,7 @@ export function SubcontractorDetailPage() {
               }
             />
             <Input
-              label="E-Mail"
+              label="Email"
               name="email"
               type="email"
               value={form.email ?? ''}
@@ -318,7 +318,7 @@ export function SubcontractorDetailPage() {
               }
             />
             <Input
-              label="Telefon"
+              label="Phone"
               name="phone"
               value={form.phone ?? ''}
               onChange={(e) =>
@@ -328,7 +328,7 @@ export function SubcontractorDetailPage() {
               }
             />
             <Input
-              label="Straße"
+              label="Street"
               name="street"
               value={form.street ?? ''}
               onChange={(e) =>
@@ -339,7 +339,7 @@ export function SubcontractorDetailPage() {
             />
             <div className="grid grid-cols-2 gap-3">
               <Input
-                label="PLZ"
+                label="Postal Code"
                 name="postalCode"
                 value={form.postalCode ?? ''}
                 onChange={(e) =>
@@ -349,7 +349,7 @@ export function SubcontractorDetailPage() {
                 }
               />
               <Input
-                label="Stadt"
+                label="City"
                 name="city"
                 value={form.city ?? ''}
                 onChange={(e) =>
@@ -366,14 +366,14 @@ export function SubcontractorDetailPage() {
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                Speichern
+                Save
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setEditing(false)}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>
@@ -442,16 +442,16 @@ export function SubcontractorDetailPage() {
               }}
             >
               <Select
-                label="Projekt"
+                label="Project"
                 name="projectId"
                 required
                 value={assignProjectId}
-                placeholder="Projekt wählen"
+                placeholder="Select project"
                 options={projectOptions}
                 onChange={(e) => setAssignProjectId(e.target.value)}
               />
               <Input
-                label="Vertragswert (optional)"
+                label="Contract Value (optional)"
                 name="assignContractValue"
                 value={assignContractValue}
                 onChange={(e) => setAssignContractValue(e.target.value)}
@@ -461,7 +461,7 @@ export function SubcontractorDetailPage() {
                   type="submit"
                   disabled={assignMutation.isPending || !assignProjectId}
                 >
-                  Zuordnen
+                  Assign
                 </Button>
               </div>
               {assignError ? (

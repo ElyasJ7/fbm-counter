@@ -70,17 +70,17 @@ export function dateOnlyToUtcStartOfDay(value: string): Date {
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
 }
 
-/** Format for UI (de-DE) without timezone shift. */
+/** Format for English UI without timezone shift (e.g. Sep 17, 2026). */
 export function formatDateOnlyDe(value: string | Date | null | undefined): string {
   if (value == null || value === '') return '—';
   try {
     const day = toDateOnlyString(value);
     const [y, m, d] = day.split('-').map(Number);
-    return new Intl.DateTimeFormat('de-DE', {
+    return new Intl.DateTimeFormat('en-US', {
       timeZone: 'UTC',
       year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      month: 'short',
+      day: 'numeric',
     }).format(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)));
   } catch {
     return '—';

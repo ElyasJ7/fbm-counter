@@ -27,9 +27,10 @@ describe('financial-core money helpers', () => {
     assert.equal(result.toFixed(2), '0.30');
   });
 
-  it('formats EUR in de-DE locale', () => {
+  it('formats EUR in en-US locale', () => {
     const formatted = formatMoneyDe('1234.56');
-    assert.match(formatted, /1\.234,56/);
+    assert.match(formatted, /1,234\.56/);
+    assert.ok(!formatted.includes('1.234,56'));
   });
 });
 

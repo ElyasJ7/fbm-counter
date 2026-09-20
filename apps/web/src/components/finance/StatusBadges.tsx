@@ -12,26 +12,26 @@ import {
 } from '@fbm/shared';
 import { Badge } from '../ui/Badge';
 
-type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'brand';
+type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'brand' | 'info';
 
 const expenseTone: Record<ExpenseStatus, Tone> = {
   DRAFT: 'neutral',
-  PENDING: 'warning',
+  PENDING: 'info',
   APPROVED: 'brand',
   PARTIALLY_PAID: 'warning',
   PAID: 'success',
   OVERDUE: 'danger',
-  CANCELLED: 'danger',
+  CANCELLED: 'neutral',
 };
 
 const invoiceTone: Record<InvoiceStatus, Tone> = {
   DRAFT: 'neutral',
-  SENT: 'brand',
-  OPEN: 'warning',
+  SENT: 'info',
+  OPEN: 'info',
   PARTIALLY_PAID: 'warning',
   PAID: 'success',
   OVERDUE: 'danger',
-  CANCELLED: 'danger',
+  CANCELLED: 'neutral',
 };
 
 export function ExpenseStatusBadge({ status }: { status: ExpenseStatus }) {

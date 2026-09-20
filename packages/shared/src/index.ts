@@ -8,6 +8,14 @@ export const ROLES = [
 
 export type Role = (typeof ROLES)[number];
 
+export const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: 'Admin',
+  MANAGEMENT: 'Management',
+  ACCOUNTING: 'Accounting',
+  PROJECT_MANAGER: 'Project Manager',
+  VIEWER: 'Viewer',
+};
+
 export const PERMISSIONS = [
   'users:read',
   'users:write',
@@ -120,7 +128,7 @@ export const GERMAN_VAT_RATES = {
 export const DEFAULT_CURRENCY = 'EUR' as const;
 
 export const APP_NAME = 'FBM Counter';
-export const APP_COMPANY_PLACEHOLDER = 'Muster Bau GmbH';
+export const APP_COMPANY_PLACEHOLDER = 'Sample Construction Ltd';
 
 export type AuthUserDto = {
   id: string;
@@ -252,15 +260,15 @@ export const BUDGET_CATEGORIES = [
 export type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
 
 export const BUDGET_CATEGORY_LABELS: Record<BudgetCategory, string> = {
-  MATERIALS: 'Materialien',
-  LABOR: 'Arbeitskräfte',
-  SUBCONTRACTORS: 'Nachunternehmer',
-  EQUIPMENT: 'Geräte',
-  TRANSPORTATION: 'Transport',
-  PERMITS: 'Genehmigungen',
-  INSURANCE: 'Versicherung',
-  PROFESSIONAL_SERVICES: 'Freie Leistungen',
-  OTHER: 'Sonstiges',
+  MATERIALS: 'Materials',
+  LABOR: 'Labor',
+  SUBCONTRACTORS: 'Subcontractors',
+  EQUIPMENT: 'Equipment',
+  TRANSPORTATION: 'Transportation',
+  PERMITS: 'Permits',
+  INSURANCE: 'Insurance',
+  PROFESSIONAL_SERVICES: 'Professional Services',
+  OTHER: 'Other',
 };
 
 export const EXPENSE_STATUSES = [
@@ -276,13 +284,13 @@ export const EXPENSE_STATUSES = [
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
 export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
-  DRAFT: 'Entwurf',
-  PENDING: 'Ausstehend',
-  APPROVED: 'Freigegeben',
-  PARTIALLY_PAID: 'Teilweise bezahlt',
-  PAID: 'Bezahlt',
-  OVERDUE: 'Überfällig',
-  CANCELLED: 'Storniert',
+  DRAFT: 'Draft',
+  PENDING: 'Pending',
+  APPROVED: 'Approved',
+  PARTIALLY_PAID: 'Partially Paid',
+  PAID: 'Paid',
+  OVERDUE: 'Overdue',
+  CANCELLED: 'Cancelled',
 };
 
 export const INVOICE_TYPES = ['CUSTOMER', 'SUPPLIER'] as const;
@@ -290,8 +298,8 @@ export const INVOICE_TYPES = ['CUSTOMER', 'SUPPLIER'] as const;
 export type InvoiceType = (typeof INVOICE_TYPES)[number];
 
 export const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
-  CUSTOMER: 'Ausgangsrechnung',
-  SUPPLIER: 'Eingangsrechnung',
+  CUSTOMER: 'Customer Invoice',
+  SUPPLIER: 'Supplier Invoice',
 };
 
 export const INVOICE_STATUSES = [
@@ -307,13 +315,13 @@ export const INVOICE_STATUSES = [
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
-  DRAFT: 'Entwurf',
-  SENT: 'Gesendet',
-  OPEN: 'Offen',
-  PARTIALLY_PAID: 'Teilweise bezahlt',
-  PAID: 'Bezahlt',
-  OVERDUE: 'Überfällig',
-  CANCELLED: 'Storniert',
+  DRAFT: 'Draft',
+  SENT: 'Sent',
+  OPEN: 'Open',
+  PARTIALLY_PAID: 'Partially Paid',
+  PAID: 'Paid',
+  OVERDUE: 'Overdue',
+  CANCELLED: 'Cancelled',
 };
 
 export const PAYMENT_METHODS = [
@@ -327,11 +335,11 @@ export const PAYMENT_METHODS = [
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  BANK_TRANSFER: 'Überweisung',
-  CASH: 'Bar',
-  CREDIT_CARD: 'Kreditkarte',
-  DIRECT_DEBIT: 'Lastschrift',
-  OTHER: 'Sonstiges',
+  BANK_TRANSFER: 'Bank Transfer',
+  CASH: 'Cash',
+  CREDIT_CARD: 'Credit Card',
+  DIRECT_DEBIT: 'Direct Debit',
+  OTHER: 'Other',
 };
 
 export const PAYMENT_TYPES = ['INCOMING', 'OUTGOING'] as const;
@@ -339,8 +347,8 @@ export const PAYMENT_TYPES = ['INCOMING', 'OUTGOING'] as const;
 export type PaymentType = (typeof PAYMENT_TYPES)[number];
 
 export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
-  INCOMING: 'Eingang',
-  OUTGOING: 'Ausgang',
+  INCOMING: 'Incoming Payment',
+  OUTGOING: 'Outgoing Payment',
 };
 
 export type ProjectRefDto = {
@@ -484,14 +492,14 @@ export const SUBCONTRACTOR_TRADES = [
 export type SubcontractorTrade = (typeof SUBCONTRACTOR_TRADES)[number];
 
 export const SUBCONTRACTOR_TRADE_LABELS: Record<SubcontractorTrade, string> = {
-  ELECTRICAL: 'Elektro',
-  PLUMBING: 'Sanitär',
-  ROOFING: 'Dach',
-  CONCRETE: 'Beton',
-  PAINTING: 'Maler',
-  CARPENTRY: 'Zimmerei',
-  HVAC: 'HLK',
-  OTHER: 'Sonstiges',
+  ELECTRICAL: 'Electrical',
+  PLUMBING: 'Plumbing',
+  ROOFING: 'Roofing',
+  CONCRETE: 'Concrete',
+  PAINTING: 'Painting',
+  CARPENTRY: 'Carpentry',
+  HVAC: 'HVAC',
+  OTHER: 'Other',
 };
 
 export type PartnerTotalsDto = {
@@ -556,14 +564,14 @@ export const DOCUMENT_CATEGORIES = [
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
 export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
-  CONTRACT: 'Vertrag',
-  INVOICE: 'Rechnung',
-  RECEIPT: 'Beleg',
+  CONTRACT: 'Contract',
+  INVOICE: 'Invoice',
+  RECEIPT: 'Receipt',
   PLAN: 'Plan',
-  PHOTO: 'Foto',
-  CERTIFICATE: 'Zertifikat',
-  CORRESPONDENCE: 'Korrespondenz',
-  OTHER: 'Sonstiges',
+  PHOTO: 'Photo',
+  CERTIFICATE: 'Certificate',
+  CORRESPONDENCE: 'Correspondence',
+  OTHER: 'Other',
 };
 
 export type DocumentUploaderDto = {
@@ -674,9 +682,9 @@ export const USER_STATUSES = ['ACTIVE', 'INACTIVE', 'INVITED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
 export const USER_STATUS_LABELS: Record<UserStatus, string> = {
-  ACTIVE: 'Aktiv',
-  INACTIVE: 'Inaktiv',
-  INVITED: 'Eingeladen',
+  ACTIVE: 'Active',
+  INACTIVE: 'Inactive',
+  INVITED: 'Invited',
 };
 
 export type UserDto = {

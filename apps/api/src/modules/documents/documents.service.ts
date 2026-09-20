@@ -264,8 +264,8 @@ export class DocumentsService {
           await this.notifications.notifyProjectManager(
             document.projectId,
             {
-              title: 'Neues Dokument',
-              message: `${document.title || document.originalFileName} wurde zu ${document.project.projectNumber} hochgeladen`,
+              title: 'New document',
+              message: `${document.title || document.originalFileName} was uploaded to ${document.project.projectNumber}`,
               type: 'document.uploaded',
               link: `/projects/${document.projectId}?tab=documents`,
             },

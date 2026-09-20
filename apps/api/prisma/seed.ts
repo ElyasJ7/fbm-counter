@@ -25,28 +25,28 @@ const seedUsers: Array<{
     email: 'management@musterbau.example',
     password: 'Manager123!',
     firstName: 'Markus',
-    lastName: 'Leitung',
+    lastName: 'Management',
     role: Role.MANAGEMENT,
   },
   {
     email: 'accounting@musterbau.example',
     password: 'Accounting123!',
     firstName: 'Clara',
-    lastName: 'Buchhaltung',
+    lastName: 'Accounting',
     role: Role.ACCOUNTING,
   },
   {
     email: 'pm@musterbau.example',
     password: 'Project123!',
     firstName: 'Peter',
-    lastName: 'Bauleiter',
+    lastName: 'Site Manager',
     role: Role.PROJECT_MANAGER,
   },
   {
     email: 'viewer@musterbau.example',
     password: 'Viewer123!',
     firstName: 'Vera',
-    lastName: 'Einsicht',
+    lastName: 'Viewer',
     role: Role.VIEWER,
   },
 ];
@@ -84,24 +84,31 @@ async function main() {
     });
   }
 
+  const companySettingsData = {
+    companyName: 'Sample Construction Ltd',
+    legalName: 'Sample Construction Limited',
+    street: '12 Construction Street',
+    postalCode: '80331',
+    city: 'Munich',
+    country: 'DE',
+    vatId: 'DE123456789',
+    taxNumber: '143/123/12345',
+    iban: 'DE89370400440532013000',
+    bic: 'COBADEFFXXX',
+    defaultCurrency: 'EUR',
+    defaultVatRate: 19.0,
+    invoicePrefix: 'INV',
+  };
+
   const existingSettings = await prisma.companySettings.findFirst();
   if (!existingSettings) {
     await prisma.companySettings.create({
-      data: {
-        companyName: 'Muster Bau GmbH',
-        legalName: 'Muster Bau Gesellschaft mit beschränkter Haftung',
-        street: 'Baustraße 12',
-        postalCode: '80331',
-        city: 'München',
-        country: 'DE',
-        vatId: 'DE123456789',
-        taxNumber: '143/123/12345',
-        iban: 'DE89370400440532013000',
-        bic: 'COBADEFFXXX',
-        defaultCurrency: 'EUR',
-        defaultVatRate: 19.0,
-        invoicePrefix: 'RE',
-      },
+      data: companySettingsData,
+    });
+  } else {
+    await prisma.companySettings.update({
+      where: { id: existingSettings.id },
+      data: companySettingsData,
     });
   }
 
@@ -111,61 +118,76 @@ async function main() {
 
   const customers = [
     {
-      companyName: 'Stadtwerke München AG',
+      companyName: 'Munich Municipal Utilities AG',
+      previousNames: ['Stadtwerke München AG'],
       contactPerson: 'Dr. Helga Weber',
       email: 'einkauf@stadtwerke-muenchen.example',
       phone: '+49 89 123456',
-      street: 'Emmy-Noether-Straße 2',
+      street: '2 Emmy Noether Street',
       postalCode: '80992',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE111222333',
     },
     {
-      companyName: 'Bayerische Wohnbau GmbH',
+      companyName: 'Bavarian Housing Ltd',
+      previousNames: ['Bayerische Wohnbau GmbH'],
       contactPerson: 'Thomas Keller',
       email: 'projekte@bay-wohnbau.example',
       phone: '+49 89 654321',
-      street: 'Leopoldstraße 88',
+      street: '88 Leopold Street',
       postalCode: '80802',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE444555666',
     },
     {
-      companyName: 'Alpenblick Immobilien KG',
+      companyName: 'Alpine View Properties KG',
+      previousNames: ['Alpenblick Immobilien KG'],
       contactPerson: 'Sabine Hofer',
       email: 'kontakt@alpenblick.example',
       phone: '+49 89 998877',
-      street: 'Theresienhöhe 10',
+      street: '10 Theresienhoehe',
       postalCode: '80339',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE777888999',
     },
   ];
 
   const customerIds: string[] = [];
   for (const customer of customers) {
+    const { previousNames, ...customerData } = customer;
     const existing = await prisma.customer.findFirst({
-      where: { companyName: customer.companyName, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { companyName: customerData.companyName },
+          ...previousNames.map((name) => ({ companyName: name })),
+        ],
+      },
     });
     if (existing) {
+      await prisma.customer.update({
+        where: { id: existing.id },
+        data: { ...customerData, deletedAt: null },
+      });
       customerIds.push(existing.id);
       continue;
     }
-    const created = await prisma.customer.create({ data: customer });
+    const created = await prisma.customer.create({ data: customerData });
     customerIds.push(created.id);
   }
 
   const projects = [
     {
       projectNumber: 'P-2026-001',
-      name: 'Wohnanlage Giesing Nord',
-      description: 'Neubau von 48 Wohneinheiten inkl. Tiefgarage.',
+      name: 'Giesing North Residential Complex',
+      description:
+        'New construction of 48 residential units including underground parking.',
       customerId: customerIds[1],
       customerContact: 'Thomas Keller',
       projectManagerId: pm?.id,
-      siteStreet: 'Tegernseer Landstraße 120',
+      siteStreet: '120 Tegernseer Land Street',
       sitePostalCode: '81539',
-      siteCity: 'München',
+      siteCity: 'Munich',
       startDate: new Date('2026-02-01'),
       expectedCompletionDate: new Date('2027-06-30'),
       status: ProjectStatus.ACTIVE,
@@ -176,14 +198,14 @@ async function main() {
     },
     {
       projectNumber: 'P-2026-002',
-      name: 'Umspannwerk Aubing Sanierung',
-      description: 'Sanierung und Erweiterung der Betriebsgebäude.',
+      name: 'Aubing Substation Renovation',
+      description: 'Renovation and expansion of the operations buildings.',
       customerId: customerIds[0],
       customerContact: 'Dr. Helga Weber',
       projectManagerId: pm?.id,
-      siteStreet: 'Bodenseestraße 250',
+      siteStreet: '250 Lake Constance Street',
       sitePostalCode: '81249',
-      siteCity: 'München',
+      siteCity: 'Munich',
       startDate: new Date('2026-01-15'),
       expectedCompletionDate: new Date('2026-11-30'),
       status: ProjectStatus.ACTIVE,
@@ -194,14 +216,14 @@ async function main() {
     },
     {
       projectNumber: 'P-2026-003',
-      name: 'Bürocampus Sendling',
-      description: 'Planungsphase für Büro- und Gewerbefläche.',
+      name: 'Sendling Office Campus',
+      description: 'Planning phase for office and commercial space.',
       customerId: customerIds[2],
       customerContact: 'Sabine Hofer',
       projectManagerId: pm?.id,
-      siteStreet: 'Plinganserstraße 50',
+      siteStreet: '50 Plinganser Street',
       sitePostalCode: '81369',
-      siteCity: 'München',
+      siteCity: 'Munich',
       startDate: new Date('2026-04-01'),
       expectedCompletionDate: new Date('2028-03-31'),
       status: ProjectStatus.PLANNING,
@@ -232,36 +254,49 @@ async function main() {
 
   const suppliers = [
     {
-      companyName: 'Bayern Baustoffe GmbH',
+      companyName: 'Bavaria Building Materials Ltd',
+      previousNames: ['Bayern Baustoffe GmbH'],
       contactPerson: 'Klaus Meier',
       email: 'verkauf@bayern-baustoffe.example',
       phone: '+49 89 111222',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE998877665',
       iban: 'DE12500105170648489890',
-      paymentTerms: '30 Tage netto',
+      paymentTerms: '30 days net',
     },
     {
-      companyName: 'Alpen Elektro AG',
+      companyName: 'Alpine Electrical AG',
+      previousNames: ['Alpen Elektro AG'],
       contactPerson: 'Julia Braun',
       email: 'office@alpen-elektro.example',
       phone: '+49 89 333444',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE112233445',
-      paymentTerms: '14 Tage netto',
+      paymentTerms: '14 days net',
     },
   ];
 
   const supplierIds: string[] = [];
   for (const supplier of suppliers) {
+    const { previousNames, ...supplierData } = supplier;
     const existing = await prisma.supplier.findFirst({
-      where: { companyName: supplier.companyName, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { companyName: supplierData.companyName },
+          ...previousNames.map((name) => ({ companyName: name })),
+        ],
+      },
     });
     if (existing) {
+      await prisma.supplier.update({
+        where: { id: existing.id },
+        data: { ...supplierData, deletedAt: null },
+      });
       supplierIds.push(existing.id);
       continue;
     }
-    const created = await prisma.supplier.create({ data: supplier });
+    const created = await prisma.supplier.create({ data: supplierData });
     supplierIds.push(created.id);
   }
 
@@ -318,13 +353,15 @@ async function main() {
 
   await prisma.expense.upsert({
     where: { expenseNumber: 'EXP-2026-0001' },
-    update: {},
+    update: {
+      description: 'Concrete and reinforcing steel delivery 1',
+    },
     create: {
       expenseNumber: 'EXP-2026-0001',
       projectId: project1.id,
       category: 'MATERIALS',
       supplierId: supplierIds[0],
-      description: 'Beton und Bewehrungsstahl Lieferung 1',
+      description: 'Concrete and reinforcing steel delivery 1',
       invoiceNumber: 'BB-45821',
       invoiceDate: new Date('2026-03-10'),
       dueDate: new Date('2026-04-09'),
@@ -341,13 +378,15 @@ async function main() {
 
   await prisma.expense.upsert({
     where: { expenseNumber: 'EXP-2026-0002' },
-    update: {},
+    update: {
+      description: 'Crane deployment March',
+    },
     create: {
       expenseNumber: 'EXP-2026-0002',
       projectId: project1.id,
       category: 'EQUIPMENT',
       supplierId: supplierIds[0],
-      description: 'Kraneinsatz März',
+      description: 'Crane deployment March',
       invoiceNumber: 'BB-45910',
       invoiceDate: new Date('2026-03-28'),
       dueDate: new Date('2026-04-27'),
@@ -362,13 +401,15 @@ async function main() {
 
   await prisma.expense.upsert({
     where: { expenseNumber: 'EXP-2026-0003' },
-    update: {},
+    update: {
+      description: 'Cables and switchgear',
+    },
     create: {
       expenseNumber: 'EXP-2026-0003',
       projectId: project2.id,
       category: 'MATERIALS',
       supplierId: supplierIds[1],
-      description: 'Kabel und Schaltanlagen',
+      description: 'Cables and switchgear',
       invoiceDate: new Date('2026-02-20'),
       dueDate: new Date('2026-03-20'),
       netAmount: '42016.81',
@@ -382,7 +423,9 @@ async function main() {
 
   const customerInvoice = await prisma.invoice.upsert({
     where: { invoiceNumber: 'RE-2026-0001' },
-    update: {},
+    update: {
+      paymentTerms: '30 days net',
+    },
     create: {
       invoiceNumber: 'RE-2026-0001',
       type: 'CUSTOMER',
@@ -396,11 +439,11 @@ async function main() {
       grossAmount: '250000.00',
       paidAmount: '150000.00',
       status: 'PARTIALLY_PAID',
-      paymentTerms: '30 Tage netto',
+      paymentTerms: '30 days net',
       items: {
         create: [
           {
-            description: 'Abschlagsrechnung Rohbau 1',
+            description: 'Progress invoice shell construction 1',
             quantity: '1',
             unitPrice: '210084.03',
             netAmount: '210084.03',
@@ -411,9 +454,16 @@ async function main() {
     },
   });
 
+  await prisma.invoiceItem.updateMany({
+    where: { invoiceId: customerInvoice.id },
+    data: { description: 'Progress invoice shell construction 1' },
+  });
+
   await prisma.invoice.upsert({
     where: { invoiceNumber: 'RE-2026-0002' },
-    update: {},
+    update: {
+      paymentTerms: '30 days net',
+    },
     create: {
       invoiceNumber: 'RE-2026-0002',
       type: 'CUSTOMER',
@@ -427,13 +477,15 @@ async function main() {
       grossAmount: '100000.00',
       paidAmount: '0',
       status: 'OPEN',
-      paymentTerms: '30 Tage netto',
+      paymentTerms: '30 days net',
     },
   });
 
   await prisma.invoice.upsert({
     where: { invoiceNumber: 'ER-2026-0001' },
-    update: {},
+    update: {
+      paymentTerms: '14 days net',
+    },
     create: {
       invoiceNumber: 'ER-2026-0001',
       type: 'SUPPLIER',
@@ -447,13 +499,15 @@ async function main() {
       grossAmount: '60000.00',
       paidAmount: '60000.00',
       status: 'PAID',
-      paymentTerms: '14 Tage netto',
+      paymentTerms: '14 days net',
     },
   });
 
   const supplierOpen = await prisma.invoice.upsert({
     where: { invoiceNumber: 'ER-2026-0002' },
-    update: {},
+    update: {
+      paymentTerms: '30 days net',
+    },
     create: {
       invoiceNumber: 'ER-2026-0002',
       type: 'SUPPLIER',
@@ -467,7 +521,7 @@ async function main() {
       grossAmount: '40000.00',
       paidAmount: '0',
       status: 'OPEN',
-      paymentTerms: '30 Tage netto',
+      paymentTerms: '30 days net',
     },
   });
 
@@ -484,8 +538,15 @@ async function main() {
         amount: '150000.00',
         type: 'INCOMING',
         method: 'BANK_TRANSFER',
-        reference: 'Abschlag 1 Wohnanlage Giesing',
+        reference: 'Progress payment 1 Giesing residential complex',
         bankReference: 'SEPA-20260328-001',
+      },
+    });
+  } else {
+    await prisma.payment.update({
+      where: { id: existingPay.id },
+      data: {
+        reference: 'Progress payment 1 Giesing residential complex',
       },
     });
   }
@@ -507,37 +568,45 @@ async function main() {
           amount: '60000.00',
           type: 'OUTGOING',
           method: 'BANK_TRANSFER',
-          reference: 'Elektro Subunternehmer',
+          reference: 'Electrical subcontractor',
         },
       });
     }
+  } else {
+    await prisma.payment.update({
+      where: { id: existingPayOut.id },
+      data: { reference: 'Electrical subcontractor' },
+    });
   }
 
   void supplierOpen;
 
   const subcontractorsSeed = [
     {
-      companyName: 'München Elektro Technik GmbH',
+      companyName: 'Munich Electrical Engineering Ltd',
+      previousNames: ['München Elektro Technik GmbH'],
       contactPerson: 'Andreas Volt',
       trade: 'ELECTRICAL' as const,
       email: 'info@muc-elektro.example',
       phone: '+49 89 555111',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE556677889',
       contractValue: '420000.0000',
     },
     {
-      companyName: 'Isar Sanitär Partner KG',
+      companyName: 'Isar Plumbing Partners KG',
+      previousNames: ['Isar Sanitär Partner KG'],
       contactPerson: 'Lena Rohr',
       trade: 'PLUMBING' as const,
       email: 'buero@isar-sanitaer.example',
       phone: '+49 89 555222',
-      city: 'München',
+      city: 'Munich',
       vatId: 'DE667788990',
       contractValue: '280000.0000',
     },
     {
-      companyName: 'Alpen Dachbau AG',
+      companyName: 'Alpine Roofing AG',
+      previousNames: ['Alpen Dachbau AG'],
       contactPerson: 'Franz Ziegel',
       trade: 'ROOFING' as const,
       email: 'projekte@alpen-dach.example',
@@ -548,18 +617,25 @@ async function main() {
 
   const subIds: string[] = [];
   for (const sub of subcontractorsSeed) {
+    const { previousNames, ...subData } = sub;
     const existing = await prisma.subcontractor.findFirst({
-      where: { companyName: sub.companyName, deletedAt: null },
+      where: {
+        deletedAt: null,
+        OR: [
+          { companyName: subData.companyName },
+          ...previousNames.map((name) => ({ companyName: name })),
+        ],
+      },
     });
     if (existing) {
       subIds.push(existing.id);
       await prisma.subcontractor.update({
         where: { id: existing.id },
-        data: { ...sub, deletedAt: null },
+        data: { ...subData, deletedAt: null },
       });
       continue;
     }
-    const created = await prisma.subcontractor.create({ data: sub });
+    const created = await prisma.subcontractor.create({ data: subData });
     subIds.push(created.id);
   }
 
@@ -570,12 +646,15 @@ async function main() {
         subcontractorId: subIds[0],
       },
     },
-    update: { contractValue: '350000.0000' },
+    update: {
+      contractValue: '350000.0000',
+      notes: 'Residential complex electrical installation',
+    },
     create: {
       projectId: project1.id,
       subcontractorId: subIds[0],
       contractValue: '350000.0000',
-      notes: 'Elektroinstallation Wohnanlage',
+      notes: 'Residential complex electrical installation',
     },
   });
 
@@ -586,12 +665,15 @@ async function main() {
         subcontractorId: subIds[1],
       },
     },
-    update: { contractValue: '180000.0000' },
+    update: {
+      contractValue: '180000.0000',
+      notes: 'Plumbing and heating',
+    },
     create: {
       projectId: project1.id,
       subcontractorId: subIds[1],
       contractValue: '180000.0000',
-      notes: 'Sanitär und Heizung',
+      notes: 'Plumbing and heating',
     },
   });
 
@@ -602,18 +684,24 @@ async function main() {
         subcontractorId: subIds[0],
       },
     },
-    update: { contractValue: '95000.0000' },
+    update: {
+      contractValue: '95000.0000',
+      notes: 'Substation electrical',
+    },
     create: {
       projectId: project2.id,
       subcontractorId: subIds[0],
       contractValue: '95000.0000',
-      notes: 'Umspannwerk Elektro',
+      notes: 'Substation electrical',
     },
   });
 
   await prisma.invoice.upsert({
     where: { invoiceNumber: 'ER-2026-0010' },
-    update: {},
+    update: {
+      paymentTerms: '30 days net',
+      notes: 'Electrical progress payment',
+    },
     create: {
       invoiceNumber: 'ER-2026-0010',
       type: 'SUPPLIER',
@@ -627,8 +715,8 @@ async function main() {
       grossAmount: '50000.00',
       paidAmount: '0',
       status: 'OPEN',
-      paymentTerms: '30 Tage netto',
-      notes: 'Abschlag Elektro',
+      paymentTerms: '30 days net',
+      notes: 'Electrical progress payment',
     },
   });
 
@@ -637,10 +725,19 @@ async function main() {
   });
   const uploaderId = admin?.id ?? pm?.id;
   if (uploaderId) {
+    const docTitle = 'Construction Contract (Draft)';
+    const docFileName = 'Contract-Giesing.txt';
+    const docDescription = 'Seed document for demo';
+    const content =
+      'Sample Construction Ltd — Construction contract Giesing North Residential Complex (seed document).\n';
+
     const existingDoc = await prisma.document.findFirst({
       where: {
-        originalFileName: 'Bauvertrag-Giesing.txt',
         deletedAt: null,
+        OR: [
+          { originalFileName: docFileName },
+          { originalFileName: 'Bauvertrag-Giesing.txt' },
+        ],
       },
     });
     if (!existingDoc) {
@@ -650,21 +747,29 @@ async function main() {
       const storageKey = `${year}/${month}/${randomUUID()}.txt`;
       const absoluteDir = join(uploadRoot, year, month);
       await mkdir(absoluteDir, { recursive: true });
-      const content =
-        'Muster Bau GmbH — Bauvertrag Wohnanlage Giesing Nord (Seed-Dokument).\n';
       await writeFile(join(uploadRoot, storageKey), content, 'utf8');
 
       await prisma.document.create({
         data: {
-          title: 'Bauvertrag (Entwurf)',
-          originalFileName: 'Bauvertrag-Giesing.txt',
+          title: docTitle,
+          originalFileName: docFileName,
           storageKey,
           mimeType: 'text/plain',
           sizeBytes: Buffer.byteLength(content, 'utf8'),
           category: 'CONTRACT',
-          description: 'Seed-Dokument für Phase 6 Demo',
+          description: docDescription,
           projectId: project1.id,
           uploadedById: uploaderId,
+        },
+      });
+    } else {
+      await prisma.document.update({
+        where: { id: existingDoc.id },
+        data: {
+          title: docTitle,
+          originalFileName: docFileName,
+          description: docDescription,
+          deletedAt: null,
         },
       });
     }
@@ -677,13 +782,23 @@ async function main() {
         type: 'system.welcome',
       },
     });
-    if (!existingNote) {
+    if (existingNote) {
+      await prisma.notification.update({
+        where: { id: existingNote.id },
+        data: {
+          title: 'Welcome to FBM Counter',
+          message:
+            'Notifications appear here for approved expenses, overdue invoices, and new documents.',
+          link: '/projects',
+        },
+      });
+    } else {
       await prisma.notification.create({
         data: {
           userId: pm.id,
-          title: 'Willkommen bei FBM Counter',
+          title: 'Welcome to FBM Counter',
           message:
-            'Benachrichtigungen erscheinen hier bei freigegebenen Ausgaben, überfälligen Rechnungen und neuen Dokumenten.',
+            'Notifications appear here for approved expenses, overdue invoices, and new documents.',
           type: 'system.welcome',
           link: '/projects',
         },
@@ -698,13 +813,21 @@ async function main() {
         type: 'system.welcome',
       },
     });
-    if (!existingAdminNote) {
+    if (existingAdminNote) {
+      await prisma.notification.update({
+        where: { id: existingAdminNote.id },
+        data: {
+          title: 'Notifications enabled',
+          message: 'The bell in the header shows unread notifications.',
+          link: '/notifications',
+        },
+      });
+    } else {
       await prisma.notification.create({
         data: {
           userId: admin.id,
-          title: 'Benachrichtigungen aktiv',
-          message:
-            'Phase 9: Glocke in der Kopfzeile zeigt ungelesene Meldungen an.',
+          title: 'Notifications enabled',
+          message: 'The bell in the header shows unread notifications.',
           type: 'system.welcome',
           link: '/notifications',
         },

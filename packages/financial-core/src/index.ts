@@ -7,7 +7,7 @@ export function formatMoneyDe(
   currency = 'EUR',
 ): string {
   const amount = money(value).toDecimalPlaces(2).toNumber();
-  return new Intl.NumberFormat('de-DE', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
   }).format(amount);

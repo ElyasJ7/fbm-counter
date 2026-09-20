@@ -187,7 +187,7 @@ export function FinancesPage() {
           value={
             <CurrencyValue value={kpis.availableCash} currency={currency} size="lg" />
           }
-          tone="brand"
+          tone="info"
         />
         <StatCard
           label="Accounts receivable"
@@ -211,18 +211,21 @@ export function FinancesPage() {
             />
           }
           hint="Supplier invoices"
+          tone="warning"
         />
         <StatCard
           label="Cash received"
           value={
             <CurrencyValue value={kpis.totalRevenue} currency={currency} size="lg" />
           }
+          tone="success"
         />
         <StatCard
           label="Actual costs"
           value={
             <CurrencyValue value={kpis.totalExpenses} currency={currency} size="lg" />
           }
+          tone="warning"
         />
         <StatCard
           label="Gross profit"

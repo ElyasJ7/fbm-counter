@@ -32,10 +32,10 @@ export function Button({
         variant === 'primary' &&
           'bg-brand text-white shadow-[var(--shadow-xs)] hover:bg-brand-hover',
         variant === 'secondary' &&
-          'border border-border bg-panel text-ink hover:bg-background',
-        variant === 'ghost' && 'text-ink hover:bg-brand-soft/60',
+          'border border-border bg-panel text-ink hover:bg-surface',
+        variant === 'ghost' && 'text-ink hover:bg-brand-soft/70',
         variant === 'danger' &&
-          'bg-danger text-white shadow-[var(--shadow-xs)] hover:bg-[#991b1b]',
+          'bg-danger text-white shadow-[var(--shadow-xs)] hover:bg-danger-hover',
         className,
       )}
       {...props}

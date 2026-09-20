@@ -30,7 +30,7 @@ import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatDateDe } from '../lib/format';
+import { formatDateDe, netAmountFieldLabel } from '../lib/format';
 import {
   approveExpense,
   createExpense,
@@ -54,11 +54,13 @@ const emptyForm: ExpenseInput = {
 type ExpensesPageProps = {
   embeddedProjectId?: string;
   compact?: boolean;
+  currency?: string;
 };
 
 export function ExpensesPage({
   embeddedProjectId,
   compact = false,
+  currency,
 }: ExpensesPageProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -175,10 +177,10 @@ export function ExpensesPage({
       {!compact ? (
         <FilterBar className="mb-4">
           <Input
-            label="Suche"
+            label="Search"
             name="search"
             value={search}
-            placeholder="Nummer, Beschreibung…"
+            placeholder="Number, description…"
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
@@ -188,7 +190,7 @@ export function ExpensesPage({
             label="Status"
             name="status"
             value={status}
-            placeholder="Alle Status"
+            placeholder="All statuses"
             options={statusOptions}
             onChange={(e) => {
               setStatus(e.target.value as ExpenseStatus | '');
@@ -199,7 +201,7 @@ export function ExpensesPage({
       ) : null}
 
       {showForm && canWrite ? (
-        <Card className="mb-6" title="Neue Ausgabe">
+        <Card className="mb-6" title="New expense">
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -208,7 +210,7 @@ export function ExpensesPage({
             }}
           >
             <Input
-              label="Beschreibung"
+              label="Description"
               name="description"
               required
               className="md:col-span-2"
@@ -218,7 +220,7 @@ export function ExpensesPage({
               }
             />
             <Input
-              label="Nettobetrag (€)"
+              label={netAmountFieldLabel(currency)}
               name="netAmount"
               required
               value={form.netAmount}
@@ -227,7 +229,7 @@ export function ExpensesPage({
               }
             />
             <Input
-              label="MwSt. %"
+              label="VAT (%)"
               name="taxRate"
               value={form.taxRate ?? '19'}
               onChange={(e) =>
@@ -235,7 +237,7 @@ export function ExpensesPage({
               }
             />
             <Select
-              label="Kategorie"
+              label="Category"
               name="category"
               value={form.category ?? 'OTHER'}
               options={categoryOptions}
@@ -260,10 +262,10 @@ export function ExpensesPage({
             />
             {!embeddedProjectId ? (
               <Select
-                label="Projekt"
+                label="Project"
                 name="projectId"
                 value={form.projectId ?? ''}
-                placeholder="Kein Projekt"
+                placeholder="No project"
                 options={(projectsQuery.data?.data ?? []).map((p) => ({
                   value: p.id,
                   label: `${p.projectNumber} · ${p.name}`,
@@ -274,10 +276,10 @@ export function ExpensesPage({
               />
             ) : null}
             <Select
-              label="Lieferant"
+              label="Supplier"
               name="supplierId"
               value={form.supplierId ?? ''}
-              placeholder="Kein Lieferant"
+              placeholder="No supplier"
               options={(suppliersQuery.data?.data ?? []).map((s) => ({
                 value: s.id,
                 label: s.companyName,
@@ -287,7 +289,7 @@ export function ExpensesPage({
               }
             />
             <Input
-              label="Rechnungsnr."
+              label="Invoice Number"
               name="invoiceNumber"
               value={form.invoiceNumber ?? ''}
               onChange={(e) =>
@@ -298,7 +300,7 @@ export function ExpensesPage({
               }
             />
             <Input
-              label="Fällig am"
+              label="Due Date"
               name="dueDate"
               type="date"
               value={form.dueDate ?? ''}
@@ -313,14 +315,14 @@ export function ExpensesPage({
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                Speichern
+                Save
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setShowForm(false)}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>
@@ -335,19 +337,19 @@ export function ExpensesPage({
 
       {query.error ? (
         <EmptyState
-          title="Ausgaben konnten nicht geladen werden"
+          title="Could not load expenses"
           description={
             query.error instanceof ApiError
               ? query.error.message
-              : 'Unerwarteter Fehler'
+              : 'Unexpected error'
           }
         />
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
         <EmptyState
-          title="Keine Ausgaben"
-          description="Erfassen Sie projektbezogene oder allgemeine Ausgaben."
+          title="No expenses"
+          description="Record project-related or general expenses."
           actionLabel={canWrite ? 'New expense' : undefined}
           onAction={
             canWrite
@@ -365,8 +367,8 @@ export function ExpensesPage({
           footer={
             <>
               <span>
-                Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-                {query.data.meta.total} gesamt)
+                Page {query.data.meta.page} of {query.data.meta.totalPages} (
+                {query.data.meta.total} total)
               </span>
               <div className="flex gap-2">
                 <Button
@@ -375,7 +377,7 @@ export function ExpensesPage({
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  Zurück
+                  Previous
                 </Button>
                 <Button
                   variant="secondary"
@@ -383,7 +385,7 @@ export function ExpensesPage({
                   disabled={page >= query.data.meta.totalPages}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  Weiter
+                  Next
                 </Button>
               </div>
             </>
@@ -392,16 +394,16 @@ export function ExpensesPage({
           <table className="min-w-full text-left text-sm">
             <thead className={dataTableHeadClassName()}>
               <tr>
-                <th className={dataTableThClassName()}>Nummer</th>
-                <th className={dataTableThClassName()}>Beschreibung</th>
+                <th className={dataTableThClassName()}>Number</th>
+                <th className={dataTableThClassName()}>Description</th>
                 {!projectFilter ? (
-                  <th className={dataTableThClassName()}>Projekt</th>
+                  <th className={dataTableThClassName()}>Project</th>
                 ) : null}
-                <th className={dataTableThClassName()}>Kategorie</th>
+                <th className={dataTableThClassName()}>Category</th>
                 <th className={dataTableThClassName()}>Status</th>
-                <th className={dataTableThClassName('right')}>Brutto</th>
-                <th className={dataTableThClassName()}>Fällig</th>
-                <th className={dataTableThClassName()}>Aktionen</th>
+                <th className={dataTableThClassName('right')}>Gross</th>
+                <th className={dataTableThClassName()}>Due</th>
+                <th className={dataTableThClassName()}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -449,7 +451,7 @@ export function ExpensesPage({
                           className="text-brand hover:underline"
                           onClick={() => approveMutation.mutate(expense.id)}
                         >
-                          Freigeben
+                          Approve
                         </button>
                       ) : null}
                       {canWrite ? (
@@ -459,14 +461,14 @@ export function ExpensesPage({
                           onClick={() => {
                             if (
                               window.confirm(
-                                `Ausgabe „${expense.expenseNumber}“ löschen?`,
+                                `Delete expense "${expense.expenseNumber}"?`,
                               )
                             ) {
                               deleteMutation.mutate(expense.id);
                             }
                           }}
                         >
-                          Löschen
+                          Delete
                         </button>
                       ) : null}
                     </div>
@@ -485,12 +487,12 @@ export function ExpensesPage({
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
-            Ausgaben für dieses Projekt
+            Expenses for this Project
           </p>
           <div className="flex gap-2">
             <Link to={`/expenses?projectId=${projectFilter}`}>
               <Button variant="secondary" size="sm">
-                Alle anzeigen
+                View All
               </Button>
             </Link>
             {canWrite ? (

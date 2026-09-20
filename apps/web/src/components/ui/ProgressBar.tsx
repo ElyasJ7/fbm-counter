@@ -24,7 +24,7 @@ export function ProgressBar({
   const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
   return (
     <div className={cn('flex min-w-[6rem] items-center gap-2', className)}>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-background">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface">
         <div
           className={cn(
             'h-full rounded-full transition-[width]',

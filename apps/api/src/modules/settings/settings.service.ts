@@ -56,7 +56,7 @@ export class SettingsService {
         country: 'DE',
         defaultCurrency: DEFAULT_CURRENCY,
         defaultVatRate: 19,
-        invoicePrefix: 'RE',
+        invoicePrefix: 'INV',
       },
     });
   }

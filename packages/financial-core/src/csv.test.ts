@@ -30,6 +30,6 @@ describe('CSV formula injection', () => {
 
   it('escapes separators without corrupting numbers', () => {
     assert.equal(csvEscapeCell('12.50'), '12.50');
-    assert.equal(csvEscapeCell('Acme; GmbH'), '"Acme; GmbH"');
+    assert.equal(csvEscapeCell('Acme, GmbH'), '"Acme, GmbH"');
   });
 });

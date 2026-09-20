@@ -1,7 +1,25 @@
 import { formatMoneyDe, formatDateOnlyDe, toDateOnlyString } from '@fbm/financial-core';
+import { DEFAULT_CURRENCY } from '@fbm/shared';
 
-export function formatCurrency(value: string | number, currency = 'EUR') {
+export function formatCurrency(
+  value: string | number,
+  currency: string = DEFAULT_CURRENCY,
+) {
   return formatMoneyDe(value, currency);
+}
+
+/** Form field label with ISO currency code, e.g. Amount (EUR). */
+export function amountFieldLabel(currency?: string | null) {
+  const code =
+    (currency ?? DEFAULT_CURRENCY).trim().toUpperCase() || DEFAULT_CURRENCY;
+  return `Amount (${code})`;
+}
+
+/** Form field label with ISO currency code, e.g. Net Amount (EUR). */
+export function netAmountFieldLabel(currency?: string | null) {
+  const code =
+    (currency ?? DEFAULT_CURRENCY).trim().toUpperCase() || DEFAULT_CURRENCY;
+  return `Net Amount (${code})`;
 }
 
 /** Business calendar dates — no timezone day-shift. */

@@ -10,12 +10,21 @@ type StatCardProps = {
 };
 
 const toneIcon: Record<NonNullable<StatCardProps['tone']>, string> = {
-  default: 'bg-background text-muted',
+  default: 'bg-surface text-subtle',
   success: 'bg-success-soft text-success',
   warning: 'bg-warning-soft text-warning',
   danger: 'bg-danger-soft text-danger',
   brand: 'bg-brand-soft text-brand',
   info: 'bg-info-soft text-info',
+};
+
+const toneAccent: Record<NonNullable<StatCardProps['tone']>, string> = {
+  default: 'before:bg-border-strong',
+  success: 'before:bg-success',
+  warning: 'before:bg-warning',
+  danger: 'before:bg-danger',
+  brand: 'before:bg-brand',
+  info: 'before:bg-info',
 };
 
 /**
@@ -32,12 +41,14 @@ export function StatCard({
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-xs)]',
+        'relative overflow-hidden rounded-[var(--radius-lg)] border border-border bg-panel p-4 shadow-[var(--shadow-xs)]',
+        'before:absolute before:inset-x-0 before:top-0 before:h-0.5',
+        toneAccent[tone],
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-caption font-medium tracking-wide uppercase">
+        <p className="text-caption font-medium tracking-wide text-subtle uppercase">
           {label}
         </p>
         {icon ? (
@@ -55,7 +66,7 @@ export function StatCard({
       <div className="mt-2 tabular-money text-xl font-semibold tracking-tight text-ink sm:text-2xl">
         {value}
       </div>
-      {hint ? <p className="mt-1.5 text-xs text-muted">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-xs text-subtle">{hint}</p> : null}
     </div>
   );
 }

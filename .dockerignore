@@ -4,8 +4,11 @@ node_modules
 .git
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 .tmp-*
+.tmp-api-deploy
 coverage
 apps/api/uploads
 **/uploads

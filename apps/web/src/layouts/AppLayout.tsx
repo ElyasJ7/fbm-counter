@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { APP_NAME, roleHasPermission, type Permission } from '@fbm/shared';
+import { APP_NAME, ROLE_LABELS, roleHasPermission, type Permission } from '@fbm/shared';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { PageContainer } from '../components/ui/PageContainer';
@@ -227,7 +227,7 @@ export function AppLayout() {
   const drawerInert = !isDesktop && !mobileOpen;
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-[var(--radius-md)] focus:bg-panel focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-[var(--shadow-sm)]"
@@ -235,213 +235,216 @@ export function AppLayout() {
         Skip to main content
       </a>
 
-      <div className="flex min-h-screen w-full">
-        <aside
-          id={navId}
-          inert={drawerInert || undefined}
-          aria-hidden={drawerInert || undefined}
+      <aside
+        id={navId}
+        inert={drawerInert || undefined}
+        aria-hidden={drawerInert || undefined}
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 flex h-dvh max-h-dvh flex-col border-r border-border bg-sidebar transition-[width,transform] duration-200',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          collapsed ? 'w-[4.25rem] lg:w-[4.25rem]' : 'w-64',
+          'max-lg:w-[min(100%,20rem)]',
+        )}
+        aria-label="Main navigation"
+      >
+        <div
           className={cn(
-            'fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-panel transition-[width,transform] duration-200 lg:static lg:translate-x-0',
-            mobileOpen ? 'translate-x-0' : '-translate-x-full',
-            collapsed ? 'w-[4.25rem] lg:w-[4.25rem]' : 'w-64',
-            'max-lg:w-[min(100%,20rem)]',
+            'flex h-14 shrink-0 items-center border-b border-border md:h-16',
+            collapsed
+              ? 'justify-center px-2 max-lg:justify-between max-lg:px-4'
+              : 'justify-between px-4',
           )}
-          aria-label="Main navigation"
         >
-          <div
-            className={cn(
-              'flex h-14 items-center border-b border-border md:h-16',
-              collapsed
-                ? 'justify-center px-2 max-lg:justify-between max-lg:px-4'
-                : 'justify-between px-4',
-            )}
+          <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
+            <p className="truncate text-sm font-semibold tracking-wide text-brand">
+              {APP_NAME}
+            </p>
+            <p className="text-caption text-subtle">Construction Finance</p>
+          </div>
+          {collapsed ? (
+            <span
+              className="hidden h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-brand-soft text-xs font-bold text-brand lg:flex"
+              aria-hidden
+            >
+              FBM
+            </span>
+          ) : null}
+          <button
+            ref={closeBtnRef}
+            type="button"
+            className="rounded-[var(--radius-sm)] p-2 text-muted hover:bg-background hover:text-ink lg:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation"
           >
-            <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
-              <p className="truncate text-sm font-semibold tracking-wide text-brand">
-                {APP_NAME}
-              </p>
-              <p className="text-caption">Construction Finance</p>
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+
+        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3">
+          {visibleGroups.map((group, groupIndex) => (
+            <div key={group.id} className={cn(groupIndex > 0 && 'mt-4')}>
+              {group.label ? (
+                <p
+                  className={cn(
+                    'mb-1.5 px-2 text-[10px] font-semibold tracking-wider text-muted/80 uppercase',
+                    collapsed && 'lg:sr-only',
+                  )}
+                >
+                  {group.label}
+                </p>
+              ) : null}
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={item.to === '/'}
+                        title={collapsed ? item.label : undefined}
+                        onClick={() => setMobileOpen(false)}
+                        className={({ isActive }) =>
+                          cn(
+                            'group relative flex min-h-10 items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-sm font-medium text-muted transition',
+                            'hover:bg-brand-soft/50 hover:text-ink',
+                            isActive &&
+                              'bg-brand-soft text-brand shadow-[var(--shadow-xs)] hover:bg-brand-soft hover:text-brand',
+                            isActive &&
+                              'before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand',
+                            collapsed && 'lg:justify-center lg:px-0',
+                          )
+                        }
+                      >
+                        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+                        <span className={cn(collapsed && 'lg:hidden')}>
+                          {item.label}
+                        </span>
+                      </NavLink>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
+          ))}
+        </nav>
+
+        <div className="hidden shrink-0 border-t border-border p-2 lg:block">
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-2.5 py-2 text-xs font-medium text-muted transition hover:bg-brand-soft/50 hover:text-ink"
+            aria-pressed={collapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
             {collapsed ? (
-              <span
-                className="hidden h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-brand-soft text-xs font-bold text-brand lg:flex"
-                aria-hidden
-              >
-                FBM
-              </span>
-            ) : null}
-            <button
-              ref={closeBtnRef}
-              type="button"
-              className="rounded-[var(--radius-sm)] p-2 text-muted hover:bg-background hover:text-ink lg:hidden"
-              onClick={() => setMobileOpen(false)}
-              aria-label="Close navigation"
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
+              <ChevronsRight className="h-4 w-4" aria-hidden />
+            ) : (
+              <>
+                <ChevronsLeft className="h-4 w-4" aria-hidden />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="shrink-0 border-t border-border p-3 lg:hidden">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-ink">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <Badge tone={roleTone(user?.role ?? 'VIEWER')}>
+                {user?.role ? ROLE_LABELS[user.role] : null}
+              </Badge>
+            </div>
           </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            onClick={() => void logout()}
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+            Log out
+          </Button>
+        </div>
+      </aside>
 
-          <nav className="flex-1 overflow-y-auto overscroll-contain px-2 py-3">
-            {visibleGroups.map((group, groupIndex) => (
-              <div key={group.id} className={cn(groupIndex > 0 && 'mt-4')}>
-                {group.label ? (
-                  <p
-                    className={cn(
-                      'mb-1.5 px-2 text-[10px] font-semibold tracking-wider text-subtle uppercase',
-                      collapsed && 'lg:sr-only',
-                    )}
-                  >
-                    {group.label}
-                  </p>
-                ) : null}
-                <ul className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <li key={item.to}>
-                        <NavLink
-                          to={item.to}
-                          end={item.to === '/'}
-                          title={collapsed ? item.label : undefined}
-                          onClick={() => setMobileOpen(false)}
-                          className={({ isActive }) =>
-                            cn(
-                              'group relative flex min-h-10 items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-sm font-medium text-muted transition',
-                              'hover:bg-background hover:text-ink',
-                              isActive &&
-                                'bg-brand-soft text-brand hover:bg-brand-soft hover:text-brand',
-                              isActive &&
-                                'before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand',
-                              collapsed && 'lg:justify-center lg:px-0',
-                            )
-                          }
-                        >
-                          <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                          <span className={cn(collapsed && 'lg:hidden')}>
-                            {item.label}
-                          </span>
-                        </NavLink>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </nav>
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-ink/40 backdrop-blur-[1px] lg:hidden"
+          aria-label="Close navigation overlay"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
 
-          <div className="hidden border-t border-border p-2 lg:block">
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="flex min-h-10 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] px-2.5 py-2 text-xs font-medium text-muted transition hover:bg-background hover:text-ink"
-              aria-pressed={collapsed}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? (
-                <ChevronsRight className="h-4 w-4" aria-hidden />
-              ) : (
-                <>
-                  <ChevronsLeft className="h-4 w-4" aria-hidden />
-                  <span>Collapse</span>
-                </>
-              )}
-            </button>
-          </div>
+      <div
+        className={cn(
+          'flex min-h-dvh min-w-0 flex-col transition-[padding] duration-200',
+          collapsed ? 'lg:pl-[4.25rem]' : 'lg:pl-64',
+        )}
+      >
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-panel/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-sm sm:gap-3 sm:px-4 md:h-16">
+          <button
+            ref={menuBtnRef}
+            type="button"
+            className="rounded-[var(--radius-sm)] p-2 text-muted hover:bg-surface hover:text-ink lg:hidden"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open navigation"
+            aria-controls={navId}
+            aria-expanded={mobileOpen}
+          >
+            <Menu className="h-5 w-5" aria-hidden />
+          </button>
 
-          <div className="border-t border-border p-3 lg:hidden">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
+          <button
+            type="button"
+            className="hidden rounded-[var(--radius-sm)] p-2 text-muted hover:bg-surface hover:text-ink lg:inline-flex xl:hidden"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-pressed={collapsed}
+          >
+            <PanelLeft className="h-5 w-5" aria-hidden />
+          </button>
+
+          <GlobalSearch />
+
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <NotificationsBell />
+            <div className="hidden items-center gap-2.5 border-l border-border pl-3 sm:flex">
+              <div className="min-w-0 text-right">
                 <p className="truncate text-sm font-medium text-ink">
                   {user?.firstName} {user?.lastName}
                 </p>
-                <Badge tone={roleTone(user?.role ?? 'VIEWER')}>
-                  {user?.role}
-                </Badge>
-              </div>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="w-full"
-              onClick={() => void logout()}
-            >
-              <LogOut className="h-4 w-4" aria-hidden />
-              Log out
-            </Button>
-          </div>
-        </aside>
-
-        {mobileOpen ? (
-          <button
-            type="button"
-            className="fixed inset-0 z-30 bg-ink/40 backdrop-blur-[1px] lg:hidden"
-            aria-label="Close navigation overlay"
-            onClick={() => setMobileOpen(false)}
-          />
-        ) : null}
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-panel/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-sm sm:gap-3 sm:px-4 md:h-16">
-            <button
-              ref={menuBtnRef}
-              type="button"
-              className="rounded-[var(--radius-sm)] p-2 text-muted hover:bg-background hover:text-ink lg:hidden"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Open navigation"
-              aria-controls={navId}
-              aria-expanded={mobileOpen}
-            >
-              <Menu className="h-5 w-5" aria-hidden />
-            </button>
-
-            <button
-              type="button"
-              className="hidden rounded-[var(--radius-sm)] p-2 text-muted hover:bg-background hover:text-ink lg:inline-flex xl:hidden"
-              onClick={toggleCollapsed}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-pressed={collapsed}
-            >
-              <PanelLeft className="h-5 w-5" aria-hidden />
-            </button>
-
-            <GlobalSearch />
-
-            <div className="ml-auto flex items-center gap-1 sm:gap-2">
-              <NotificationsBell />
-              <div className="hidden items-center gap-2.5 border-l border-border pl-3 sm:flex">
-                <div className="min-w-0 text-right">
-                  <p className="truncate text-sm font-medium text-ink">
-                    {user?.firstName} {user?.lastName}
-                  </p>
-                  <div className="flex justify-end">
-                    <Badge tone={roleTone(user?.role ?? 'VIEWER')}>
-                      {user?.role}
-                    </Badge>
-                  </div>
+                <div className="flex justify-end">
+                  <Badge tone={roleTone(user?.role ?? 'VIEWER')}>
+                    {user?.role ? ROLE_LABELS[user.role] : null}
+                  </Badge>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void logout()}
-                  aria-label="Log out"
-                >
-                  <LogOut className="h-4 w-4" aria-hidden />
-                  <span className="hidden md:inline">Log out</span>
-                </Button>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void logout()}
+                aria-label="Log out"
+              >
+                <LogOut className="h-4 w-4" aria-hidden />
+                <span className="hidden md:inline">Log out</span>
+              </Button>
             </div>
-          </header>
+          </div>
+        </header>
 
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className="flex-1 px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:p-6"
-          >
-            <PageContainer>
-              <Outlet />
-            </PageContainer>
-          </main>
-        </div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 md:p-6"
+        >
+          <PageContainer>
+            <Outlet />
+          </PageContainer>
+        </main>
       </div>
     </div>
   );

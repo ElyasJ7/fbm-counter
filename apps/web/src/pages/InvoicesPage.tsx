@@ -34,7 +34,7 @@ import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError, apiDownload } from '../lib/api';
-import { formatDateDe } from '../lib/format';
+import { formatDateDe, netAmountFieldLabel } from '../lib/format';
 import {
   createInvoice,
   deleteInvoice,
@@ -48,7 +48,7 @@ import { fetchCustomers, fetchProjects } from '../services/projects';
 async function downloadInvoicePdf(id: string, fallbackName: string) {
   const response = await apiDownload(invoicePdfPath(id));
   if (!response.ok) {
-    throw new Error('PDF-Download fehlgeschlagen');
+    throw new Error('PDF download failed');
   }
   const blob = await response.blob();
   const disposition = response.headers.get('Content-Disposition') ?? '';
@@ -93,11 +93,13 @@ const emptyForm: InvoiceInput = {
 type InvoicesPageProps = {
   embeddedProjectId?: string;
   compact?: boolean;
+  currency?: string;
 };
 
 export function InvoicesPage({
   embeddedProjectId,
   compact = false,
+  currency,
 }: InvoicesPageProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -176,7 +178,7 @@ export function InvoicesPage({
         notes: form.notes?.trim() || undefined,
         items: [
           {
-            description: form.notes?.trim() || 'Position 1',
+            description: form.notes?.trim() || 'Line item 1',
             quantity: '1',
             unitPrice: form.netAmount.trim(),
             netAmount: form.netAmount.trim(),
@@ -231,20 +233,20 @@ export function InvoicesPage({
       {!compact ? (
         <FilterBar className="mb-4">
           <Input
-            label="Suche"
+            label="Search"
             name="search"
             value={search}
-            placeholder="Nummer, Notiz…"
+            placeholder="Number, note…"
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
           />
           <Select
-            label="Typ"
+            label="Type"
             name="type"
             value={type}
-            placeholder="Alle Typen"
+            placeholder="All types"
             options={typeOptions}
             onChange={(e) => {
               setType(e.target.value as InvoiceType | '');
@@ -255,7 +257,7 @@ export function InvoicesPage({
             label="Status"
             name="status"
             value={status}
-            placeholder="Alle Status"
+            placeholder="All statuses"
             options={statusOptions}
             onChange={(e) => {
               setStatus(e.target.value as InvoiceStatus | '');
@@ -266,7 +268,7 @@ export function InvoicesPage({
       ) : null}
 
       {showForm && canWrite ? (
-        <Card className="mb-6" title="Neue Rechnung">
+        <Card className="mb-6" title="New invoice">
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -275,7 +277,7 @@ export function InvoicesPage({
             }}
           >
             <Select
-              label="Typ"
+              label="Type"
               name="type"
               value={form.type}
               options={typeOptions}
@@ -301,7 +303,7 @@ export function InvoicesPage({
               }
             />
             <Input
-              label="Nettobetrag (€)"
+              label={netAmountFieldLabel(currency)}
               name="netAmount"
               required
               value={form.netAmount}
@@ -310,7 +312,7 @@ export function InvoicesPage({
               }
             />
             <Input
-              label="MwSt. %"
+              label="VAT (%)"
               name="taxRate"
               value={form.taxRate ?? '19'}
               onChange={(e) =>
@@ -318,7 +320,7 @@ export function InvoicesPage({
               }
             />
             <Input
-              label="Rechnungsdatum"
+              label="Invoice Date"
               name="issueDate"
               type="date"
               required
@@ -328,7 +330,7 @@ export function InvoicesPage({
               }
             />
             <Input
-              label="Fällig am"
+              label="Due Date"
               name="dueDate"
               type="date"
               required
@@ -339,10 +341,10 @@ export function InvoicesPage({
             />
             {!embeddedProjectId ? (
               <Select
-                label="Projekt"
+                label="Project"
                 name="projectId"
                 value={form.projectId ?? ''}
-                placeholder="Kein Projekt"
+                placeholder="No project"
                 options={(projectsQuery.data?.data ?? []).map((p) => ({
                   value: p.id,
                   label: `${p.projectNumber} · ${p.name}`,
@@ -354,10 +356,10 @@ export function InvoicesPage({
             ) : null}
             {form.type === 'CUSTOMER' ? (
               <Select
-                label="Kunde"
+                label="Customer"
                 name="customerId"
                 value={form.customerId ?? ''}
-                placeholder="Kunde wählen"
+                placeholder="Select customer"
                 options={(customersQuery.data?.data ?? []).map((c) => ({
                   value: c.id,
                   label: c.companyName,
@@ -368,10 +370,10 @@ export function InvoicesPage({
               />
             ) : (
               <Select
-                label="Lieferant"
+                label="Supplier"
                 name="supplierId"
                 value={form.supplierId ?? ''}
-                placeholder="Lieferant wählen"
+                placeholder="Select supplier"
                 options={(suppliersQuery.data?.data ?? []).map((s) => ({
                   value: s.id,
                   label: s.companyName,
@@ -382,7 +384,7 @@ export function InvoicesPage({
               />
             )}
             <Input
-              label="Notiz / Positionsbeschreibung"
+              label="Note / Line item description"
               name="notes"
               className="md:col-span-2"
               value={form.notes ?? ''}
@@ -397,14 +399,14 @@ export function InvoicesPage({
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                Speichern
+                Save
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setShowForm(false)}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>
@@ -451,8 +453,8 @@ export function InvoicesPage({
           footer={
             <>
               <span>
-                Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-                {query.data.meta.total} gesamt)
+                Page {query.data.meta.page} of {query.data.meta.totalPages} (
+                {query.data.meta.total} total)
               </span>
               <div className="flex gap-2">
                 <Button
@@ -461,7 +463,7 @@ export function InvoicesPage({
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  Zurück
+                  Previous
                 </Button>
                 <Button
                   variant="secondary"
@@ -469,7 +471,7 @@ export function InvoicesPage({
                   disabled={page >= query.data.meta.totalPages}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  Weiter
+                  Next
                 </Button>
               </div>
             </>
@@ -478,17 +480,17 @@ export function InvoicesPage({
           <table className="min-w-full text-left text-sm">
             <thead className={dataTableHeadClassName()}>
               <tr>
-                <th className={dataTableThClassName()}>Nummer</th>
-                <th className={dataTableThClassName()}>Typ</th>
-                <th className={dataTableThClassName()}>Partei</th>
+                <th className={dataTableThClassName()}>Number</th>
+                <th className={dataTableThClassName()}>Type</th>
+                <th className={dataTableThClassName()}>Party</th>
                 {!projectFilter ? (
-                  <th className={dataTableThClassName()}>Projekt</th>
+                  <th className={dataTableThClassName()}>Project</th>
                 ) : null}
                 <th className={dataTableThClassName()}>Status</th>
-                <th className={dataTableThClassName('right')}>Brutto</th>
-                <th className={dataTableThClassName('right')}>Bezahlt</th>
-                <th className={dataTableThClassName()}>Fällig</th>
-                <th className={dataTableThClassName()}>Aktionen</th>
+                <th className={dataTableThClassName('right')}>Gross</th>
+                <th className={dataTableThClassName('right')}>Paid</th>
+                <th className={dataTableThClassName()}>Due</th>
+                <th className={dataTableThClassName()}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -545,7 +547,7 @@ export function InvoicesPage({
                               window.alert(
                                 error instanceof Error
                                   ? error.message
-                                  : 'PDF-Download fehlgeschlagen',
+                                  : 'PDF download failed',
                               );
                             });
                           }}
@@ -556,7 +558,7 @@ export function InvoicesPage({
                           className="text-brand hover:underline"
                           to={`/payments?invoiceId=${invoice.id}`}
                         >
-                          Zahlungen
+                          Payments
                         </Link>
                         {canWrite ? (
                           <button
@@ -565,14 +567,14 @@ export function InvoicesPage({
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  `Rechnung „${invoice.invoiceNumber}“ löschen?`,
+                                  `Delete invoice "${invoice.invoiceNumber}"?`,
                                 )
                               ) {
                                 deleteMutation.mutate(invoice.id);
                               }
                             }}
                           >
-                            Löschen
+                            Delete
                           </button>
                         ) : null}
                       </div>
@@ -592,12 +594,12 @@ export function InvoicesPage({
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
-            Rechnungen für dieses Projekt
+            Invoices for this Project
           </p>
           <div className="flex gap-2">
             <Link to={`/invoices?projectId=${projectFilter}`}>
               <Button variant="secondary" size="sm">
-                Alle anzeigen
+                View All
               </Button>
             </Link>
             {canWrite ? (

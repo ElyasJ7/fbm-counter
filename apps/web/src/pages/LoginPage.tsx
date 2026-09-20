@@ -38,15 +38,29 @@ export function LoginPage() {
     return <Navigate to={from} replace />;
   }
 
-  async function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
+    // Prefer FormData so browser autofill values are included even when
+    // React controlled state was never updated via onChange.
+    const formData = new FormData(event.currentTarget);
+    const emailValue = String(formData.get('email') ?? email).trim();
+    const passwordValue = String(formData.get('password') ?? password);
     try {
-      await login(email, password);
+      await login(emailValue, passwordValue);
       navigate(from, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (
+        err &&
+        typeof err === 'object' &&
+        'status' in err &&
+        typeof (err as { message?: unknown }).message === 'string'
+      ) {
+        setError((err as { message: string }).message);
+      } else if (err instanceof Error && err.message) {
         setError(err.message);
       } else {
         setError('Login failed. Please try again.');

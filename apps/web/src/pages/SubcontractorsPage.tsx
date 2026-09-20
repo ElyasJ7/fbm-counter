@@ -177,7 +177,7 @@ export function SubcontractorsPage() {
             }}
           >
             <Input
-              label="Firmenname"
+              label="Company Name"
               name="companyName"
               required
               value={form.companyName}
@@ -186,7 +186,7 @@ export function SubcontractorsPage() {
               }
             />
             <Select
-              label="Gewerk"
+              label="Trade"
               name="trade"
               required
               value={form.trade}
@@ -199,7 +199,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="Ansprechpartner"
+              label="Contact Person"
               name="contactPerson"
               value={form.contactPerson ?? ''}
               onChange={(e) =>
@@ -207,7 +207,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="E-Mail"
+              label="Email"
               name="email"
               type="email"
               value={form.email ?? ''}
@@ -216,7 +216,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="Telefon"
+              label="Phone"
               name="phone"
               value={form.phone ?? ''}
               onChange={(e) =>
@@ -224,7 +224,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="Vertragswert"
+              label="Contract Value"
               name="contractValue"
               value={form.contractValue ?? ''}
               onChange={(e) =>
@@ -232,7 +232,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="Straße"
+              label="Street"
               name="street"
               value={form.street ?? ''}
               onChange={(e) =>
@@ -241,7 +241,7 @@ export function SubcontractorsPage() {
             />
             <div className="grid grid-cols-2 gap-3">
               <Input
-                label="PLZ"
+                label="Postal Code"
                 name="postalCode"
                 value={form.postalCode ?? ''}
                 onChange={(e) =>
@@ -249,7 +249,7 @@ export function SubcontractorsPage() {
                 }
               />
               <Input
-                label="Stadt"
+                label="City"
                 name="city"
                 value={form.city ?? ''}
                 onChange={(e) =>
@@ -258,7 +258,7 @@ export function SubcontractorsPage() {
               />
             </div>
             <Input
-              label="USt-IdNr."
+              label="VAT ID"
               name="vatId"
               value={form.vatId ?? ''}
               onChange={(e) =>
@@ -266,7 +266,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="Steuernummer"
+              label="Tax Number"
               name="taxNumber"
               value={form.taxNumber ?? ''}
               onChange={(e) =>
@@ -274,7 +274,7 @@ export function SubcontractorsPage() {
               }
             />
             <Input
-              label="Notizen"
+              label="Notes"
               name="notes"
               value={form.notes ?? ''}
               onChange={(e) =>
@@ -288,7 +288,7 @@ export function SubcontractorsPage() {
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                Speichern
+                Save
               </Button>
               <Button
                 type="button"
@@ -298,7 +298,7 @@ export function SubcontractorsPage() {
                   setEditingId(null);
                 }}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>

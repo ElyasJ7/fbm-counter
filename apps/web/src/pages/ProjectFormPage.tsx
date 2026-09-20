@@ -4,8 +4,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   PROJECT_STATUSES,
   PROJECT_STATUS_LABELS,
+  ROLE_LABELS,
   roleHasPermission,
   type ProjectStatus,
+  type Role,
 } from '@fbm/shared';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
@@ -294,7 +296,7 @@ export function ProjectFormPage() {
               options={
                 managersQuery.data?.map((m) => ({
                   value: m.id,
-                  label: `${m.firstName} ${m.lastName} (${m.role})`,
+                  label: `${m.firstName} ${m.lastName} (${ROLE_LABELS[m.role as Role] ?? m.role})`,
                 })) ?? []
               }
               onChange={(e) =>

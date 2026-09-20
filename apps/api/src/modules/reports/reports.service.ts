@@ -464,7 +464,7 @@ export class ReportsService {
 
     if (type === 'cashflow') {
       const rows = [
-        ['Monat', 'Eingänge', 'Ausgänge', 'Netto', 'Währung'],
+        ['Month', 'Inflows', 'Outflows', 'Net', 'Currency'],
         ...summary.monthlyCashFlow.map((row) => [
           row.month,
           row.inflow,
@@ -482,16 +482,16 @@ export class ReportsService {
     if (type === 'profitability') {
       const rows = [
         [
-          'Projektnummer',
+          'Project Number',
           'Name',
           'Status',
-          'Zahlungseingang',
-          'Kosten',
-          'Gewinn',
-          'Marge_%',
-          'Auftragswert',
+          'Cash Received',
+          'Costs',
+          'Profit',
+          'Margin_%',
+          'Contract Value',
           'Budget',
-          'Währung',
+          'Currency',
         ],
         ...summary.projectProfitability.map((row) => [
           row.projectNumber,
@@ -513,28 +513,24 @@ export class ReportsService {
     }
 
     const rows = [
-      ['Kennzahl', 'Wert', 'Währung'],
-      ['Zahlungseingang (Cash received)', summary.kpis.totalRevenue, currency],
-      ['Gesamtausgaben', summary.kpis.totalExpenses, currency],
-      ['Bruttogewinn', summary.kpis.grossProfit, currency],
-      ['Nettogewinn', summary.kpis.netProfit, currency],
-      ['Verfügbare Liquidität', summary.kpis.availableCash, currency],
+      ['Metric', 'Value', 'Currency'],
+      ['Cash Received', summary.kpis.totalRevenue, currency],
+      ['Total Expenses', summary.kpis.totalExpenses, currency],
+      ['Gross Profit', summary.kpis.grossProfit, currency],
+      ['Net Profit', summary.kpis.netProfit, currency],
+      ['Available Cash', summary.kpis.availableCash, currency],
       [
-        'Offene Kundenforderungen',
+        'Accounts Receivable',
         summary.kpis.outstandingCustomerInvoices,
         currency,
       ],
-      [
-        'Offene Lieferantenverbindlichkeiten',
-        summary.kpis.outstandingSupplierInvoices,
-        currency,
-      ],
-      ['Aktive Projekte', String(summary.kpis.activeProjects), ''],
-      ['Auftragswert gesamt', summary.kpis.totalProjectValue, currency],
-      ['Budget gesamt', summary.kpis.totalBudget, currency],
-      ['Budgetauslastung_%', summary.kpis.budgetUtilizationPercent ?? '', ''],
+      ['Accounts Payable', summary.kpis.outstandingSupplierInvoices, currency],
+      ['Active Projects', String(summary.kpis.activeProjects), ''],
+      ['Total Contract Value', summary.kpis.totalProjectValue, currency],
+      ['Total Budget', summary.kpis.totalBudget, currency],
+      ['Budget Utilization_%', summary.kpis.budgetUtilizationPercent ?? '', ''],
       [],
-      ['Monat', 'Eingänge', 'Ausgänge', 'Netto', 'Währung'],
+      ['Month', 'Inflows', 'Outflows', 'Net', 'Currency'],
       ...summary.monthlyCashFlow.map((row) => [
         row.month,
         row.inflow,
@@ -544,16 +540,16 @@ export class ReportsService {
       ]),
       [],
       [
-        'Projektnummer',
+        'Project Number',
         'Name',
         'Status',
-        'Zahlungseingang',
-        'Kosten',
-        'Gewinn',
-        'Marge_%',
-        'Auftragswert',
+        'Cash Received',
+        'Costs',
+        'Profit',
+        'Margin_%',
+        'Contract Value',
         'Budget',
-        'Währung',
+        'Currency',
       ],
       ...summary.projectProfitability.map((row) => [
         row.projectNumber,
@@ -582,30 +578,30 @@ export class ReportsService {
   ) {
     const summary = await this.getSummary(query, user);
     const buffer = await buildPdfBuffer((doc) => {
-      doc.fontSize(18).text('FBM Counter Bericht');
+      doc.fontSize(18).text('FBM Counter Report');
       doc
         .fontSize(10)
         .fillColor('#555')
         .text(
-          `Zeitraum: ${summary.period.from ?? 'alle'} – ${summary.period.to ?? 'alle'}`,
+          `Period: ${summary.period.from ?? 'all'} – ${summary.period.to ?? 'all'}`,
         );
-      doc.text(`Erstellt: ${summary.generatedAt}`);
+      doc.text(`Generated: ${summary.generatedAt}`);
       doc.moveDown();
 
       if (type === 'summary' || type === 'cashflow') {
-        doc.fillColor('#000').fontSize(12).text('Kennzahlen');
+        doc.fillColor('#000').fontSize(12).text('KPIs');
         doc.fontSize(10);
         doc.text(
-          `Zahlungseingang: ${summary.kpis.totalRevenue} ${summary.currency}`,
+          `Cash Received: ${summary.kpis.totalRevenue} ${summary.currency}`,
         );
         doc.text(
-          `Gesamtausgaben: ${summary.kpis.totalExpenses} ${summary.currency}`,
+          `Total Expenses: ${summary.kpis.totalExpenses} ${summary.currency}`,
         );
         doc.text(
-          `Bruttogewinn: ${summary.kpis.grossProfit} ${summary.currency}`,
+          `Gross Profit: ${summary.kpis.grossProfit} ${summary.currency}`,
         );
         doc.text(
-          `Liquidität: ${summary.kpis.availableCash} ${summary.currency}`,
+          `Available Cash: ${summary.kpis.availableCash} ${summary.currency}`,
         );
         doc.moveDown();
         doc.fontSize(12).text('Cashflow');
@@ -619,11 +615,11 @@ export class ReportsService {
 
       if (type === 'summary' || type === 'profitability') {
         doc.moveDown();
-        doc.fillColor('#000').fontSize(12).text('Projektrentabilität');
+        doc.fillColor('#000').fontSize(12).text('Project Profitability');
         doc.fontSize(10);
         for (const row of summary.projectProfitability) {
           doc.text(
-            `${row.projectNumber} ${row.name}: Gewinn ${row.profit} ${summary.currency}`,
+            `${row.projectNumber} ${row.name}: Profit ${row.profit} ${summary.currency}`,
           );
         }
       }

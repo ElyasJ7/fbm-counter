@@ -536,12 +536,12 @@ export class ExpensesService {
 
       const projectLabel = updated.project
         ? `${updated.project.projectNumber} — ${updated.project.name}`
-        : 'ohne Projekt';
+        : 'no project';
       await this.notifications.notifyProjectManager(
         updated.projectId,
         {
-          title: 'Ausgabe freigegeben',
-          message: `${updated.expenseNumber} (${updated.description}) wurde freigegeben · ${projectLabel}`,
+          title: 'Expense approved',
+          message: `${updated.expenseNumber} (${updated.description}) was approved · ${projectLabel}`,
           type: 'expense.approved',
           link: updated.projectId
             ? `/projects/${updated.projectId}?tab=expenses`
@@ -553,8 +553,8 @@ export class ExpensesService {
         await this.notifications.createForRoles(
           [Role.ACCOUNTING, Role.MANAGEMENT],
           {
-            title: 'Ausgabe freigegeben',
-            message: `${updated.expenseNumber} (${updated.description}) wurde freigegeben`,
+            title: 'Expense approved',
+            message: `${updated.expenseNumber} (${updated.description}) was approved`,
             type: 'expense.approved',
             link: '/expenses',
           },

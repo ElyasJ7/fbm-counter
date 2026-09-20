@@ -3,13 +3,13 @@ import { Badge } from '../ui/Badge';
 
 const toneByStatus: Record<
   ProjectStatus,
-  'neutral' | 'success' | 'warning' | 'danger' | 'brand'
+  'neutral' | 'success' | 'warning' | 'danger' | 'brand' | 'info'
 > = {
-  PLANNING: 'neutral',
+  PLANNING: 'info',
   ACTIVE: 'success',
   ON_HOLD: 'warning',
   COMPLETED: 'brand',
-  CANCELLED: 'danger',
+  CANCELLED: 'neutral',
 };
 
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {

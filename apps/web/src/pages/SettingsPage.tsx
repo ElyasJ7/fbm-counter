@@ -30,7 +30,7 @@ const emptyForm: SettingsInput = {
   bic: '',
   defaultCurrency: 'EUR',
   defaultVatRate: '19',
-  invoicePrefix: 'RE',
+  invoicePrefix: 'INV',
 };
 
 function Field({
@@ -105,7 +105,7 @@ export function SettingsPage() {
         bic: form.bic?.trim() || undefined,
         defaultCurrency: form.defaultCurrency?.trim().toUpperCase() || 'EUR',
         defaultVatRate: form.defaultVatRate?.trim() || '19',
-        invoicePrefix: form.invoicePrefix?.trim().toUpperCase() || 'RE',
+        invoicePrefix: form.invoicePrefix?.trim().toUpperCase() || 'INV',
       };
       return updateSettings(payload);
     },
@@ -315,9 +315,9 @@ export function SettingsPage() {
                 }
               />
               <Input
-                label="Invoice prefix (outgoing)"
+                label="Invoice prefix (customer invoices)"
                 name="invoicePrefix"
-                value={form.invoicePrefix ?? 'RE'}
+                value={form.invoicePrefix ?? 'INV'}
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
@@ -327,8 +327,8 @@ export function SettingsPage() {
               />
             </FormSection>
             <p className="-mt-4 text-xs text-muted">
-              The invoice prefix applies to outgoing invoices. Incoming invoices
-              continue to use ER.
+              The invoice prefix applies to customer invoices. Supplier invoices
+              continue to use the SI prefix.
             </p>
 
             {formError ? <Alert tone="danger">{formError}</Alert> : null}

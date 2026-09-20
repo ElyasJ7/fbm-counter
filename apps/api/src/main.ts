@@ -25,7 +25,8 @@ async function bootstrap() {
   app.use(cookieParser());
 
   const corsOrigin =
-    config.get<string>('CORS_ORIGIN') ?? 'http://localhost:5173';
+    config.get<string>('CORS_ORIGIN') ??
+    'http://localhost:5173,http://127.0.0.1:5173';
   app.enableCors({
     origin: corsOrigin.split(',').map((value) => value.trim()),
     credentials: true,

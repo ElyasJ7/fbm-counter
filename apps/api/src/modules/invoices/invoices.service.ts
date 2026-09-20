@@ -12,7 +12,11 @@ import {
   resolveInvoiceStatus,
   toDateOnlyString,
 } from '@fbm/financial-core';
-import type { AuthUserDto } from '@fbm/shared';
+import {
+  INVOICE_STATUS_LABELS,
+  INVOICE_TYPE_LABELS,
+  type AuthUserDto,
+} from '@fbm/shared';
 import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -90,10 +94,10 @@ export class InvoicesService {
 
     const projectLabel = invoice.project
       ? `${invoice.project.projectNumber} — ${invoice.project.name}`
-      : 'ohne Projekt';
+      : 'no project';
     const payload = {
-      title: 'Rechnung überfällig',
-      message: `${invoice.invoiceNumber} ist überfällig · ${projectLabel}`,
+      title: 'Invoice overdue',
+      message: `${invoice.invoiceNumber} is overdue · ${projectLabel}`,
       type: 'invoice.overdue',
       link: invoice.projectId
         ? `/projects/${invoice.projectId}?tab=invoices`
@@ -120,9 +124,9 @@ export class InvoicesService {
       select: { invoicePrefix: true },
     });
     const customerPrefix = (
-      settings?.invoicePrefix?.trim() || 'RE'
+      settings?.invoicePrefix?.trim() || 'INV'
     ).toUpperCase();
-    const basePrefix = type === InvoiceType.CUSTOMER ? customerPrefix : 'ER';
+    const basePrefix = type === InvoiceType.CUSTOMER ? customerPrefix : 'SI';
     const prefix = `${basePrefix}-${year}-`;
     const sequenceKey = `invoice:${prefix}`;
 
@@ -392,37 +396,39 @@ export class InvoicesService {
         continued: false,
       });
       doc.moveDown(0.5);
-      doc.fontSize(14).text(`Rechnung ${data.invoiceNumber}`);
+      doc.fontSize(14).text(`Invoice ${data.invoiceNumber}`);
       doc.fontSize(10).fillColor('#555');
-      doc.text(`Typ: ${data.type} · Status: ${data.status}`);
       doc.text(
-        `Datum: ${data.issueDate.slice(0, 10)} · Fällig: ${data.dueDate.slice(0, 10)}`,
+        `Type: ${INVOICE_TYPE_LABELS[data.type] ?? data.type} · Status: ${INVOICE_STATUS_LABELS[data.status] ?? data.status}`,
       );
-      if (data.customer) doc.text(`Kunde: ${data.customer.companyName}`);
-      if (data.supplier) doc.text(`Lieferant: ${data.supplier.companyName}`);
+      doc.text(
+        `Date: ${data.issueDate.slice(0, 10)} · Due: ${data.dueDate.slice(0, 10)}`,
+      );
+      if (data.customer) doc.text(`Customer: ${data.customer.companyName}`);
+      if (data.supplier) doc.text(`Supplier: ${data.supplier.companyName}`);
       if (data.project) {
         doc.text(
-          `Projekt: ${data.project.projectNumber} — ${data.project.name}`,
+          `Project: ${data.project.projectNumber} — ${data.project.name}`,
         );
       }
       doc.moveDown();
-      doc.fillColor('#000').fontSize(11).text('Positionen');
+      doc.fillColor('#000').fontSize(11).text('Line items');
       doc.moveDown(0.3);
       for (const item of data.items) {
         doc
           .fontSize(10)
           .text(
-            `${item.description} · Menge ${item.quantity} · ${item.netAmount} EUR`,
+            `${item.description} · Qty ${item.quantity} · ${item.netAmount} EUR`,
           );
       }
       doc.moveDown();
-      doc.fontSize(11).text(`Netto: ${data.netAmount} EUR`);
-      doc.text(`MwSt. (${data.taxRate}%): ${data.taxAmount} EUR`);
-      doc.fontSize(12).text(`Brutto: ${data.grossAmount} EUR`);
-      doc.text(`Bezahlt: ${data.paidAmount} EUR`);
+      doc.fontSize(11).text(`Net: ${data.netAmount} EUR`);
+      doc.text(`VAT (${data.taxRate}%): ${data.taxAmount} EUR`);
+      doc.fontSize(12).text(`Gross: ${data.grossAmount} EUR`);
+      doc.text(`Paid: ${data.paidAmount} EUR`);
       if (data.notes) {
         doc.moveDown();
-        doc.fontSize(10).fillColor('#555').text(`Notiz: ${data.notes}`);
+        doc.fontSize(10).fillColor('#555').text(`Note: ${data.notes}`);
       }
     });
 

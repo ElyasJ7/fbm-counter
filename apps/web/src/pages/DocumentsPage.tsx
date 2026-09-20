@@ -223,13 +223,13 @@ export function DocumentsPage({
         <Card title="Upload document" className="mb-4">
           <div className="grid gap-3 md:grid-cols-2">
             <Input
-              label="Titel (optional)"
+              label="Title (optional)"
               name="title"
               value={form.title}
               onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
             />
             <Select
-              label="Kategorie"
+              label="Category"
               name="category"
               value={form.category}
               onChange={(e) =>
@@ -242,18 +242,18 @@ export function DocumentsPage({
             />
             {!embeddedProjectId ? (
               <Select
-                label="Projekt (optional)"
+                label="Project (optional)"
                 name="projectId"
                 value={form.projectId}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, projectId: e.target.value }))
                 }
                 options={projectOptions}
-                placeholder="Kein Projekt"
+                placeholder="No project"
               />
             ) : null}
             <label className="flex w-full flex-col gap-1.5 text-sm md:col-span-2">
-              <span className="font-medium text-ink">Datei</span>
+              <span className="font-medium text-ink">File</span>
               <input
                 type="file"
                 name="file"
@@ -268,7 +268,7 @@ export function DocumentsPage({
             </label>
             <div className="md:col-span-2">
               <Input
-                label="Beschreibung (optional)"
+                label="Description (optional)"
                 name="description"
                 value={form.description}
                 onChange={(e) =>

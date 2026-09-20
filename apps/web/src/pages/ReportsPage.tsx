@@ -44,20 +44,12 @@ import { useAuth } from '../hooks/useAuth';
 import { ApiError, apiDownload } from '../lib/api';
 import { formatCurrency } from '../lib/format';
 import { fetchReports, reportsExportPath } from '../services/reports';
+import { CHART_PALETTE, CHART_SERIES } from '../lib/chart-colors';
 
-const CHART_COLORS = [
-  '#0f4c5c',
-  '#e36414',
-  '#15803d',
-  '#b45309',
-  '#64748b',
-  '#1d4ed8',
-  '#be123c',
-  '#0f766e',
-];
+const CHART_COLORS = [...CHART_SERIES];
 
-const CHART_GRID = '#e2e8f0';
-const CHART_TICK = { fontSize: 11, fill: '#64748b' };
+const CHART_GRID = CHART_PALETTE.grid;
+const CHART_TICK = { fontSize: 11, fill: CHART_PALETTE.tick };
 
 function toNumber(value: string) {
   return Number(value);
@@ -66,7 +58,7 @@ function toNumber(value: string) {
 function formatMonthLabel(month: string) {
   const [year, m] = month.split('-');
   const date = new Date(Number(year), Number(m) - 1, 1);
-  return new Intl.DateTimeFormat('de-DE', {
+  return new Intl.DateTimeFormat('en-GB', {
     month: 'short',
     year: '2-digit',
   }).format(date);
@@ -86,7 +78,7 @@ function moneyTick(value: number) {
 function chartTooltipStyle() {
   return {
     borderRadius: 8,
-    border: '1px solid #e2e8f0',
+    border: `1px solid ${CHART_PALETTE.grid}`,
     boxShadow: '0 1px 2px rgb(15 23 42 / 0.05)',
     fontSize: 12,
   };
@@ -106,7 +98,7 @@ async function downloadReport(
     }),
   );
   if (!response.ok) {
-    throw new Error('Export fehlgeschlagen');
+    throw new Error('Export failed');
   }
   const blob = await response.blob();
   const disposition = response.headers.get('Content-Disposition') ?? '';
@@ -184,7 +176,7 @@ export function ReportsPage() {
       await downloadReport(type, appliedFrom, appliedTo, format);
     } catch (error) {
       setExportError(
-        error instanceof Error ? error.message : 'Export fehlgeschlagen',
+        error instanceof Error ? error.message : 'Export failed',
       );
     } finally {
       setExporting(null);
@@ -419,14 +411,14 @@ export function ReportsPage() {
                   <Bar
                     dataKey="inflow"
                     name="Inflow"
-                    fill="#15803d"
+                    fill={CHART_PALETTE.inflow}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}
                   />
                   <Bar
                     dataKey="outflow"
                     name="Outflow"
-                    fill="#be123c"
+                    fill={CHART_PALETTE.outflow}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}
                   />

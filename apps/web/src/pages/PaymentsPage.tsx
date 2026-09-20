@@ -29,7 +29,7 @@ import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
-import { formatCurrency, formatDateDe } from '../lib/format';
+import { amountFieldLabel, formatCurrency, formatDateDe } from '../lib/format';
 import {
   createPayment,
   deletePayment,
@@ -54,11 +54,13 @@ const emptyForm: PaymentInput = {
 type PaymentsPageProps = {
   embeddedProjectId?: string;
   compact?: boolean;
+  currency?: string;
 };
 
 export function PaymentsPage({
   embeddedProjectId,
   compact = false,
+  currency,
 }: PaymentsPageProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -150,7 +152,7 @@ export function PaymentsPage({
   const content = (
     <>
       {showForm && canWrite ? (
-        <Card className="mb-6" title="Neue Zahlung">
+        <Card className="mb-6" title="New Payment">
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -159,21 +161,21 @@ export function PaymentsPage({
             }}
           >
             <Select
-              label="Rechnung"
+              label="Invoice"
               name="invoiceId"
               required
               value={form.invoiceId}
-              placeholder="Rechnung wählen"
+              placeholder="Select Invoice"
               options={(invoicesQuery.data?.data ?? []).map((inv) => ({
                 value: inv.id,
-                label: `${inv.invoiceNumber} · ${formatCurrency(inv.grossAmount)} (${formatCurrency(inv.paidAmount)} bezahlt)`,
+                label: `${inv.invoiceNumber} · ${formatCurrency(inv.grossAmount, currency)} (${formatCurrency(inv.paidAmount, currency)} paid)`,
               }))}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, invoiceId: e.target.value }))
               }
             />
             <Input
-              label="Betrag (€)"
+              label={amountFieldLabel(currency)}
               name="amount"
               required
               value={form.amount}
@@ -182,7 +184,7 @@ export function PaymentsPage({
               }
             />
             <Input
-              label="Zahlungsdatum"
+              label="Payment Date"
               name="paymentDate"
               type="date"
               required
@@ -192,7 +194,7 @@ export function PaymentsPage({
               }
             />
             <Select
-              label="Zahlungsart"
+              label="Payment Method"
               name="method"
               value={form.method ?? 'BANK_TRANSFER'}
               options={methodOptions}
@@ -204,7 +206,7 @@ export function PaymentsPage({
               }
             />
             <Input
-              label="Referenz"
+              label="Reference"
               name="reference"
               value={form.reference ?? ''}
               onChange={(e) =>
@@ -212,7 +214,7 @@ export function PaymentsPage({
               }
             />
             <Input
-              label="Notiz"
+              label="Note"
               name="notes"
               value={form.notes ?? ''}
               onChange={(e) =>
@@ -226,14 +228,14 @@ export function PaymentsPage({
             ) : null}
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saveMutation.isPending}>
-                Speichern
+                Save
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => setShowForm(false)}
               >
-                Abbrechen
+                Cancel
               </Button>
             </div>
           </form>
@@ -248,19 +250,19 @@ export function PaymentsPage({
 
       {query.error ? (
         <EmptyState
-          title="Zahlungen konnten nicht geladen werden"
+          title="Could not load payments"
           description={
             query.error instanceof ApiError
               ? query.error.message
-              : 'Unerwarteter Fehler'
+              : 'Unexpected error'
           }
         />
       ) : null}
 
       {query.data && query.data.data.length === 0 ? (
         <EmptyState
-          title="Keine Zahlungen"
-          description="Erfassen Sie Zahlungseingänge und -ausgänge gegen Rechnungen."
+          title="No payments"
+          description="Record incoming and outgoing payments against invoices."
           actionLabel={canWrite ? 'Record payment' : undefined}
           onAction={
             canWrite
@@ -278,8 +280,8 @@ export function PaymentsPage({
           footer={
             <>
               <span>
-                Seite {query.data.meta.page} von {query.data.meta.totalPages} (
-                {query.data.meta.total} gesamt)
+                Page {query.data.meta.page} of {query.data.meta.totalPages} (
+                {query.data.meta.total} total)
               </span>
               <div className="flex gap-2">
                 <Button
@@ -288,7 +290,7 @@ export function PaymentsPage({
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  Zurück
+                  Previous
                 </Button>
                 <Button
                   variant="secondary"
@@ -296,7 +298,7 @@ export function PaymentsPage({
                   disabled={page >= query.data.meta.totalPages}
                   onClick={() => setPage((p) => p + 1)}
                 >
-                  Weiter
+                  Next
                 </Button>
               </div>
             </>
@@ -305,16 +307,16 @@ export function PaymentsPage({
           <table className="min-w-full text-left text-sm">
             <thead className={dataTableHeadClassName()}>
               <tr>
-                <th className={dataTableThClassName()}>Nummer</th>
-                <th className={dataTableThClassName()}>Rechnung</th>
+                <th className={dataTableThClassName()}>Number</th>
+                <th className={dataTableThClassName()}>Invoice</th>
                 {!projectFilter ? (
-                  <th className={dataTableThClassName()}>Projekt</th>
+                  <th className={dataTableThClassName()}>Project</th>
                 ) : null}
-                <th className={dataTableThClassName()}>Typ</th>
-                <th className={dataTableThClassName()}>Art</th>
-                <th className={dataTableThClassName('right')}>Betrag</th>
-                <th className={dataTableThClassName()}>Datum</th>
-                <th className={dataTableThClassName()}>Aktionen</th>
+                <th className={dataTableThClassName()}>Type</th>
+                <th className={dataTableThClassName()}>Method</th>
+                <th className={dataTableThClassName('right')}>Amount</th>
+                <th className={dataTableThClassName()}>Date</th>
+                <th className={dataTableThClassName()}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -365,14 +367,14 @@ export function PaymentsPage({
                         onClick={() => {
                           if (
                             window.confirm(
-                              `Zahlung „${payment.paymentNumber}“ löschen?`,
+                              `Delete payment "${payment.paymentNumber}"?`,
                             )
                           ) {
                             deleteMutation.mutate(payment.id);
                           }
                         }}
                       >
-                        Löschen
+                        Delete
                       </button>
                     ) : null}
                   </td>
@@ -390,12 +392,12 @@ export function PaymentsPage({
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
-            Zahlungen für dieses Projekt
+            Payments for this Project
           </p>
           <div className="flex gap-2">
             <Link to={`/payments?projectId=${projectFilter}`}>
               <Button variant="secondary" size="sm">
-                Alle anzeigen
+                View All
               </Button>
             </Link>
             {canWrite ? (
@@ -407,7 +409,7 @@ export function PaymentsPage({
                   setFormError(null);
                 }}
               >
-                Record payment
+                New Payment
               </Button>
             ) : null}
           </div>

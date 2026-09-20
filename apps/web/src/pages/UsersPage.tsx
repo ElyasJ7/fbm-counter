@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
+  ROLE_LABELS,
   ROLES,
   USER_STATUSES,
   USER_STATUS_LABELS,
@@ -185,7 +186,7 @@ export function UsersPage() {
         <Card title="Create user">
           <div className="grid gap-3 md:grid-cols-2">
             <Input
-              label="E-Mail"
+              label="Email"
               name="email"
               type="email"
               value={createForm.email}
@@ -195,7 +196,7 @@ export function UsersPage() {
               required
             />
             <Select
-              label="Rolle"
+              label="Role"
               name="role"
               value={createForm.role}
               onChange={(e) =>
@@ -204,10 +205,13 @@ export function UsersPage() {
                   role: e.target.value as Role,
                 }))
               }
-              options={ROLES.map((role) => ({ value: role, label: role }))}
+              options={ROLES.map((role) => ({
+                value: role,
+                label: ROLE_LABELS[role],
+              }))}
             />
             <Input
-              label="Vorname"
+              label="First Name"
               name="firstName"
               value={createForm.firstName}
               onChange={(e) =>
@@ -219,7 +223,7 @@ export function UsersPage() {
               required
             />
             <Input
-              label="Nachname"
+              label="Last Name"
               name="lastName"
               value={createForm.lastName}
               onChange={(e) =>
@@ -246,7 +250,7 @@ export function UsersPage() {
               }))}
             />
             <Input
-              label="Initialpasswort"
+              label="Initial Password"
               name="password"
               type="password"
               value={createForm.password}
@@ -282,7 +286,7 @@ export function UsersPage() {
         <Card title="Edit user">
           <div className="grid gap-3 md:grid-cols-2">
             <Input
-              label="E-Mail"
+              label="Email"
               name="editEmail"
               type="email"
               value={editForm.email ?? ''}
@@ -291,7 +295,7 @@ export function UsersPage() {
               }
             />
             <Select
-              label="Rolle"
+              label="Role"
               name="editRole"
               value={editForm.role ?? 'VIEWER'}
               onChange={(e) =>
@@ -300,10 +304,13 @@ export function UsersPage() {
                   role: e.target.value as Role,
                 }))
               }
-              options={ROLES.map((role) => ({ value: role, label: role }))}
+              options={ROLES.map((role) => ({
+                value: role,
+                label: ROLE_LABELS[role],
+              }))}
             />
             <Input
-              label="Vorname"
+              label="First Name"
               name="editFirstName"
               value={editForm.firstName ?? ''}
               onChange={(e) =>
@@ -314,7 +321,7 @@ export function UsersPage() {
               }
             />
             <Input
-              label="Nachname"
+              label="Last Name"
               name="editLastName"
               value={editForm.lastName ?? ''}
               onChange={(e) =>
@@ -337,7 +344,7 @@ export function UsersPage() {
               }))}
             />
             <Input
-              label="Neues Passwort (optional)"
+              label="New Password (optional)"
               name="editPassword"
               type="password"
               value={editForm.password ?? ''}
@@ -394,7 +401,7 @@ export function UsersPage() {
                   </td>
                   <td className={dataTableTdClassName()}>{row.email}</td>
                   <td className={dataTableTdClassName()}>
-                    <Badge tone="brand">{row.role}</Badge>
+                    <Badge tone="brand">{ROLE_LABELS[row.role]}</Badge>
                   </td>
                   <td className={dataTableTdClassName()}>
                     <Badge tone={statusTone(row.status)}>

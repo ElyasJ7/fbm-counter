@@ -8,18 +8,18 @@ export class MoneyParseError extends Error {
 }
 
 /**
- * Parse user-facing German/EU monetary input into a Decimal.
+ * Parse user-facing monetary input into a Decimal.
  *
  * Accepted:
  * - `1234.56` (plain / API style)
- * - `1.234,56` / `1234,56` / `0,99` (German)
+ * - `1.234,56` / `1234,56` / `0,99` (comma decimal)
  * - optional leading `+` / `-`
  * - optional trailing/leading spaces
  * - optional € / EUR suffix/prefix
  *
  * Rejected (no silent reinterpretation):
  * - empty / non-numeric
- * - mixed ambiguous separators (e.g. `1,234.56` with both US grouping and German comma)
+ * - mixed ambiguous separators (e.g. `1,234.56` with both grouping styles)
  * - multiple decimal separators
  */
 export function parseMoneyDe(raw: string): Decimal {
@@ -60,7 +60,7 @@ export function parseMoneyDe(raw: string): Decimal {
       normalized = value.replace(/\./g, '').replace(',', '.');
     } else {
       throw new MoneyParseError(
-        `Ambiguous amount (use German 1.234,56 or plain 1234.56): ${raw}`,
+        `Ambiguous amount (use 1234.56 or 1.234,56): ${raw}`,
       );
     }
   } else if (hasComma) {

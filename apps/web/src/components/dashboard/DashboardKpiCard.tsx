@@ -13,12 +13,21 @@ type DashboardKpiCardProps = {
 };
 
 const toneIcon: Record<NonNullable<DashboardKpiCardProps['tone']>, string> = {
-  default: 'bg-background text-muted',
+  default: 'bg-surface text-subtle',
   success: 'bg-success-soft text-success',
   warning: 'bg-warning-soft text-warning',
   danger: 'bg-danger-soft text-danger',
   brand: 'bg-brand-soft text-brand',
   info: 'bg-info-soft text-info',
+};
+
+const toneAccent: Record<NonNullable<DashboardKpiCardProps['tone']>, string> = {
+  default: 'before:bg-border-strong',
+  success: 'before:bg-success',
+  warning: 'before:bg-warning',
+  danger: 'before:bg-danger',
+  brand: 'before:bg-brand',
+  info: 'before:bg-info',
 };
 
 /**
@@ -37,7 +46,7 @@ export function DashboardKpiCard({
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-caption font-medium tracking-wide uppercase">
+        <p className="text-caption font-medium tracking-wide text-subtle uppercase">
           {label}
         </p>
         {icon ? (
@@ -60,15 +69,17 @@ export function DashboardKpiCard({
       >
         {value}
       </div>
-      {hint ? <p className="mt-1.5 text-xs text-muted">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-xs text-subtle">{hint}</p> : null}
     </>
   );
 
   const shellClass = cn(
-    'rounded-[var(--radius-lg)] border border-border bg-panel shadow-[var(--shadow-xs)]',
-    emphasis === 'primary' ? 'p-4 sm:p-5' : 'bg-panel/80 p-3.5 sm:p-4',
+    'relative overflow-hidden rounded-[var(--radius-lg)] border border-border bg-panel shadow-[var(--shadow-xs)]',
+    'before:absolute before:inset-x-0 before:top-0 before:h-0.5',
+    toneAccent[tone],
+    emphasis === 'primary' ? 'p-4 sm:p-5' : 'bg-panel p-3.5 sm:p-4',
     to &&
-      'transition hover:border-border-strong hover:bg-background/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
+      'transition hover:border-border-strong hover:bg-surface/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30',
     className,
   );
 
