@@ -32,7 +32,10 @@ export class OpenExchangeRatesProvider implements ExchangeRateProvider {
     url.searchParams.set('app_id', this.apiKey!.trim());
     // Free tier: USD base only
     url.searchParams.set('base', 'USD');
-    url.searchParams.set('symbols', [...new Set(['USD', ...currencies])].join(','));
+    url.searchParams.set(
+      'symbols',
+      [...new Set(['USD', ...currencies])].join(','),
+    );
 
     const response = await fetch(url, {
       headers: { Accept: 'application/json' },
@@ -57,10 +60,9 @@ export class OpenExchangeRatesProvider implements ExchangeRateProvider {
       throw new Error('Open Exchange Rates response missing rates');
     }
 
-    const fetchedAt = new Date();
-    const effectiveAt = json.timestamp
+    const fetchedAt = json.timestamp
       ? new Date(json.timestamp * 1000)
-      : fetchedAt;
+      : new Date();
 
     const pivotRates: Record<string, Decimal> = { USD: money(1) };
     for (const [code, value] of Object.entries(json.rates)) {

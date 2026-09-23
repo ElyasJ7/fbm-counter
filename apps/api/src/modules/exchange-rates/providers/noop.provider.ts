@@ -13,9 +13,12 @@ export class NoopExchangeRateProvider implements ExchangeRateProvider {
     return false;
   }
 
-  async fetchLatest(_currencies: readonly string[]): Promise<FetchLatestResult> {
-    throw new Error(
-      'FX provider is not configured. Set FX_PROVIDER and FX_API_KEY to enable live rates.',
+  fetchLatest(_currencies: readonly string[]): Promise<FetchLatestResult> {
+    void _currencies;
+    return Promise.reject(
+      new Error(
+        'FX provider is not configured. Set FX_PROVIDER and FX_API_KEY to enable live rates.',
+      ),
     );
   }
 }

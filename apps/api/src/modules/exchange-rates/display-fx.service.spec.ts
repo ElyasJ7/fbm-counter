@@ -4,9 +4,7 @@ import type { CurrencyConversionService } from './currency-conversion.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AuthUserDto } from '@fbm/shared';
 
-function user(
-  preferredDisplayCurrency: string | null = null,
-): AuthUserDto {
+function user(preferredDisplayCurrency: string | null = null): AuthUserDto {
   return {
     id: 'u1',
     email: 'a@b.c',
@@ -84,20 +82,21 @@ describe('DisplayFxService (Phase H)', () => {
 
     it('converts all amounts with one rate path', async () => {
       (currencyConversion.convertForDisplay as jest.Mock).mockImplementation(
-        async (amount: string) => ({
-          status: 'converted',
-          originalAmount: amount,
-          originalCurrency: 'EUR',
-          convertedAmount: String(Number(amount) * 78.5),
-          convertedCurrency: 'AFN',
-          exchangeRate: '78.5',
-          effectiveAt: '2026-09-21T00:00:00.000Z',
-          fetchedAt: '2026-09-21T00:00:00.000Z',
-          source: 'PROVIDER',
-          provider: 'test',
-          rateId: 'r1',
-          isDisplayConversion: true,
-        }),
+        (amount: string) =>
+          Promise.resolve({
+            status: 'converted',
+            originalAmount: amount,
+            originalCurrency: 'EUR',
+            convertedAmount: String(Number(amount) * 78.5),
+            convertedCurrency: 'AFN',
+            exchangeRate: '78.5',
+            effectiveAt: '2026-09-21T00:00:00.000Z',
+            fetchedAt: '2026-09-21T00:00:00.000Z',
+            source: 'PROVIDER',
+            provider: 'test',
+            rateId: 'r1',
+            isDisplayConversion: true,
+          }),
       );
 
       const result = await service.convertMoneyFields(
@@ -128,11 +127,7 @@ describe('DisplayFxService (Phase H)', () => {
       });
 
       const original = ['100.0000', '25.0000'];
-      const result = await service.convertMoneyFields(
-        original,
-        'EUR',
-        'AFN',
-      );
+      const result = await service.convertMoneyFields(original, 'EUR', 'AFN');
       expect(result.fx.status).toBe('unavailable');
       expect(result.amounts).toEqual(original);
       expect(service.labeledCurrency(result.fx)).toBe('EUR');
