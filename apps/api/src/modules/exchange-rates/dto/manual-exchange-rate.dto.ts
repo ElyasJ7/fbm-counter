@@ -1,4 +1,10 @@
-import { IsNumberString, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsNumberString,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { IsIn } from 'class-validator';
 import { SUPPORTED_CURRENCIES } from '@fbm/shared';
 

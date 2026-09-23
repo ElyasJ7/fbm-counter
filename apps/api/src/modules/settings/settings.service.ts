@@ -65,9 +65,7 @@ export class SettingsService {
     try {
       return assertSupportedCurrency(value);
     } catch {
-      throw new BadRequestException(
-        `${field} must be one of AFN, EUR, USD`,
-      );
+      throw new BadRequestException(`${field} must be one of AFN, EUR, USD`);
     }
   }
 

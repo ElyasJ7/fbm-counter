@@ -6,10 +6,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import {
-  SUPPORTED_CURRENCIES,
-  SUPPORTED_TIMEZONES,
-} from '@fbm/shared';
+import { SUPPORTED_CURRENCIES, SUPPORTED_TIMEZONES } from '@fbm/shared';
 
 export class UpdateSettingsDto {
   @IsOptional()

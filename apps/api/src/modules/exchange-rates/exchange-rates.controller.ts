@@ -67,10 +67,7 @@ export class ExchangeRatesController {
 
   @Post('manual')
   @Roles('ADMIN', 'MANAGEMENT')
-  manual(
-    @Body() dto: ManualExchangeRateDto,
-    @CurrentUser() user: AuthUserDto,
-  ) {
+  manual(@Body() dto: ManualExchangeRateDto, @CurrentUser() user: AuthUserDto) {
     return this.exchangeRates.setManualRate({
       baseCurrency: dto.baseCurrency,
       quoteCurrency: dto.quoteCurrency,

@@ -1,10 +1,7 @@
 import { Body, Controller, Get, Patch, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
-import {
-  Public,
-  Roles,
-} from '../../common/decorators/auth.decorators';
+import { Public, Roles } from '../../common/decorators/auth.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUserDto } from '@fbm/shared';
 import { AuthService } from './auth.service';

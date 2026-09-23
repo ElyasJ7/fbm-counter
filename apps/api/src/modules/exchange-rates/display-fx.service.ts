@@ -91,7 +91,11 @@ export class DisplayFxService {
     }
 
     if (amounts.length === 0) {
-      const probe = await this.convertAmount('1', baseCurrency, displayCurrency);
+      const probe = await this.convertAmount(
+        '1',
+        baseCurrency,
+        displayCurrency,
+      );
       return {
         amounts,
         fx: {

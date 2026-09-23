@@ -209,7 +209,7 @@ export class DashboardService {
     const labeledCurrency = this.displayFx.labeledCurrency(fx);
 
     let i = 0;
-    const take = () => converted[i++]!;
+    const take = () => converted[i++];
 
     const kpis = {
       totalRevenue: take(),

@@ -247,7 +247,9 @@ export class ExchangeRatesService {
     const base = assertSupportedCurrency(input.baseCurrency);
     const quote = assertSupportedCurrency(input.quoteCurrency);
     if (base === quote) {
-      throw new BadRequestException('baseCurrency and quoteCurrency must differ');
+      throw new BadRequestException(
+        'baseCurrency and quoteCurrency must differ',
+      );
     }
 
     const reason = input.reason.trim();
@@ -322,11 +324,15 @@ export class ExchangeRatesService {
 
     try {
       if (!this.provider.isConfigured()) {
-        this.logger.debug(`FX refresh skipped (${source}): provider not configured`);
+        this.logger.debug(
+          `FX refresh skipped (${source}): provider not configured`,
+        );
         return;
       }
       await this.refreshFromProvider();
-      this.logger.log(`FX rates refreshed (${source}) via ${this.provider.name}`);
+      this.logger.log(
+        `FX rates refreshed (${source}) via ${this.provider.name}`,
+      );
     } catch (error) {
       this.logger.error(
         `FX refresh failed (${source}): ${error instanceof Error ? error.message : String(error)}`,

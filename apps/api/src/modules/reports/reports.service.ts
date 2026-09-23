@@ -181,7 +181,7 @@ export class ReportsService {
     const labeledCurrency = this.displayFx.labeledCurrency(fx);
 
     let i = 0;
-    const take = () => converted[i++]!;
+    const take = () => converted[i++];
 
     return {
       currency: labeledCurrency,
@@ -698,7 +698,15 @@ export class ReportsService {
         summary.kpis.outstandingSupplierInvoices,
         ...moneyMeta,
       ],
-      ['Active Projects', String(summary.kpis.activeProjects), '', '', '', '', ''],
+      [
+        'Active Projects',
+        String(summary.kpis.activeProjects),
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
       ['Total Contract Value', summary.kpis.totalProjectValue, ...moneyMeta],
       ['Total Budget', summary.kpis.totalBudget, ...moneyMeta],
       [
@@ -772,9 +780,7 @@ export class ReportsService {
       if (summary.fx.status === 'converted' && summary.fx.exchangeRate) {
         doc.text(
           `FX: 1 ${summary.baseCurrency} = ${summary.fx.exchangeRate} ${summary.displayCurrency}` +
-            (summary.fx.fetchedAt
-              ? ` (as of ${summary.fx.fetchedAt})`
-              : ''),
+            (summary.fx.fetchedAt ? ` (as of ${summary.fx.fetchedAt})` : ''),
         );
       } else if (summary.fx.status === 'unavailable') {
         doc.text(
