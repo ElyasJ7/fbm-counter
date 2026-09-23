@@ -5,6 +5,8 @@ build
 .env.*
 !.env.example
 deploy/staging.env
+deploy/*.env
+!deploy/*.env.example
 *.log
 .DS_Store
 coverage

@@ -1,0 +1,173 @@
+name: Release images
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    steps:
+      - name: Resolve checkout SHA
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "api_image=ghcr.io/${OWNER}/fbm-api" >> "$GITHUB_OUTPUT"
+          echo "web_image=ghcr.io/${OWNER}/fbm-web" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.sha }}
+
+      - name: Image tags
+        id: tags
+        run: |
+          SHA="${{ steps.meta.outputs.sha }}"
+          echo "full=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "short=${SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API (linux/amd64, linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.api_image }}:${{ steps.tags.outputs.full }}
+            ${{ steps.meta.outputs.api_image }}:${{ steps.tags.outputs.short }}
+            ${{ steps.meta.outputs.api_image }}:latest
+          cache-from: type=gha,scope=fbm-api
+          cache-to: type=gha,mode=max,scope=fbm-api
+
+      - name: Build and push Web (linux/amd64, linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VITE_API_URL=/api
+          tags: |
+            ${{ steps.meta.outputs.web_image }}:${{ steps.tags.outputs.full }}
+            ${{ steps.meta.outputs.web_image }}:${{ steps.tags.outputs.short }}
+            ${{ steps.meta.outputs.web_image }}:latest
+          cache-from: type=gha,scope=fbm-web
+          cache-to: type=gha,mode=max,scope=fbm-web
+
+      - name: Summary
+        run: |
+          {
+            echo "### GHCR images"
+            echo "- \`${{ steps.meta.outputs.api_image }}:${{ steps.tags.outputs.short }}\`"
+            echo "- \`${{ steps.meta.outputs.web_image }}:${{ steps.tags.outputs.short }}\`"
+            echo "- platforms: \`linux/amd64\`, \`linux/arm64\` (Oracle Ampere OK)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Export deploy outputs
+        id: out
+        run: |
+          echo "short=${{ steps.tags.outputs.short }}" >> "$GITHUB_OUTPUT"
+          echo "owner=${{ steps.meta.outputs.owner }}" >> "$GITHUB_OUTPUT"
+          echo "api_image=${{ steps.meta.outputs.api_image }}" >> "$GITHUB_OUTPUT"
+          echo "web_image=${{ steps.meta.outputs.web_image }}" >> "$GITHUB_OUTPUT"
+
+    outputs:
+      short: ${{ steps.out.outputs.short }}
+      owner: ${{ steps.out.outputs.owner }}
+      api_image: ${{ steps.out.outputs.api_image }}
+      web_image: ${{ steps.out.outputs.web_image }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: publish
+    if: needs.publish.result == 'success'
+    steps:
+      - name: Check deploy secrets
+        id: gate
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "${DEPLOY_HOST}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No DEPLOY_HOST secret — images published; SSH deploy skipped."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Deploy over SSH
+        if: steps.gate.outputs.skip == 'false'
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GHCR_USER,GHCR_TOKEN,ACTOR
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/fbm
+            SHORT="${{ needs.publish.outputs.short }}"
+            OWNER="${{ needs.publish.outputs.owner }}"
+            API_IMG="${{ needs.publish.outputs.api_image }}:${SHORT}"
+            WEB_IMG="${{ needs.publish.outputs.web_image }}:${SHORT}"
+            if [ -d /opt/fbm/repo/.git ]; then
+              git -C /opt/fbm/repo fetch --depth 1 origin "${{ github.event.workflow_run.head_sha || github.sha }}"
+              git -C /opt/fbm/repo checkout -q "${{ github.event.workflow_run.head_sha || github.sha }}"
+              cp /opt/fbm/repo/deploy/production.compose.yml /opt/fbm/production.compose.yml
+              cp /opt/fbm/repo/deploy/Caddyfile /opt/fbm/Caddyfile
+              cp /opt/fbm/repo/deploy/deploy.sh /opt/fbm/deploy.sh
+              cp /opt/fbm/repo/deploy/backup-daily.sh /opt/fbm/backup-daily.sh
+              cp /opt/fbm/repo/deploy/create-admin.sh /opt/fbm/create-admin.sh
+              cp /opt/fbm/repo/deploy/create-admin.cjs /opt/fbm/create-admin.cjs
+              chmod +x /opt/fbm/*.sh
+            fi
+            sed -i "s|^FBM_API_IMAGE=.*|FBM_API_IMAGE=${API_IMG}|" .env || echo "FBM_API_IMAGE=${API_IMG}" >> .env
+            sed -i "s|^FBM_WEB_IMAGE=.*|FBM_WEB_IMAGE=${WEB_IMG}|" .env || echo "FBM_WEB_IMAGE=${WEB_IMG}" >> .env
+            LOGIN_USER="${GHCR_USER:-$ACTOR}"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${LOGIN_USER}" --password-stdin
+            ./deploy.sh

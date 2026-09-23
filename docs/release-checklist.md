@@ -63,6 +63,11 @@ Mark each gate **Yes** / **No**. Do not ship with any **No** on Critical gates u
 | Web | http://127.0.0.1:8081 |
 | API | http://127.0.0.1:3002/api |
 | DB | localhost:5433 / `fbm_counter_staging` |
+
+### Oracle Cloud public deploy
+
+Follow **`docs/oracle-cloud-deployment.md`** (GHCR multi-arch images, Caddy HTTPS, `/opt/fbm`, SSH deploy). Manual Oracle VM + DNS + `/opt/fbm/.env` still required before claiming cloud go-live.
+
 ## Sign-off
 
 | Role | Name | Date |

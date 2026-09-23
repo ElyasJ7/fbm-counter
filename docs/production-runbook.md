@@ -20,17 +20,18 @@ Requirements:
 
 ## Deploy
 
+See **`docs/oracle-cloud-deployment.md`** for Oracle Cloud Free + GHCR + Caddy.
+
 1. Take a Postgres backup (`scripts/backup-postgres.sh` or provider snapshot).
-2. Build images:
+2. Build images (CI publishes multi-arch to GHCR) **or** locally:
    - `docker build -f apps/api/Dockerfile -t fbm-api:<tag> .`
-   - `docker build -f apps/web/Dockerfile -t fbm-web:<tag> --build-arg VITE_API_URL=https://api.example.com/api .`
-3. Set production env (see `.env.example` + staging checklist).
-4. Run `prisma migrate deploy` against production DB (from CI job, release container, or one-off migrate container with same image).
-5. Roll API then web (or blue/green).
-6. Verify:
+   - `docker build -f apps/web/Dockerfile -t fbm-web:<tag> --build-arg VITE_API_URL=/api .`
+3. Set production env on the server (`deploy/production.env.example` → `/opt/fbm/.env`).
+4. Run `./deploy.sh` on the VM (pull → backup → `prisma migrate deploy` → up → health).
+5. Verify:
    - `GET /api/health` → ok
    - `GET /api/health/ready` → database up
-   - Login as admin
+   - Login as admin (HTTPS + Secure cookies)
    - Create/read one project invoice smoke
 
 ## Rollback

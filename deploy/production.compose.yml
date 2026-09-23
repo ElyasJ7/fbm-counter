@@ -1,0 +1,128 @@
+# Production / Oracle Cloud Free stack
+# Layout on server: /opt/fbm
+#   compose.yml → symlink or copy of this file
+#   .env          (from deploy/production.env.example — never commit)
+#   Caddyfile
+#   data/postgres uploads/ backups/ caddy/
+#
+# Images come from GHCR (set FBM_API_IMAGE / FBM_WEB_IMAGE).
+# Public: Caddy :80/:443 only. Postgres/API/web stay on internal network.
+
+name: fbm
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fbm-postgres
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fbm_counter}
+      POSTGRES_USER: ${POSTGRES_USER:-fbm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - ${FBM_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+    networks:
+      - fbm_internal
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # No public ports
+
+  api:
+    image: ${FBM_API_IMAGE:?FBM_API_IMAGE is required}
+    container_name: fbm-api
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ${FBM_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      API_PORT: 3001
+      API_PREFIX: api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fbm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fbm_counter}?schema=public
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      ALLOW_SEED: ${ALLOW_SEED:-false}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      UPLOAD_DIR: /app/uploads
+      FX_PROVIDER: ${FX_PROVIDER:-none}
+      FX_API_KEY: ${FX_API_KEY:-}
+    volumes:
+      - ${FBM_UPLOADS_DIR:-./uploads}:/app/uploads
+    networks:
+      - fbm_internal
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/api/health']
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    # No public ports — reached via Caddy only
+
+  web:
+    image: ${FBM_WEB_IMAGE:?FBM_WEB_IMAGE is required}
+    container_name: fbm-web
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - fbm_internal
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    # No public ports
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: fbm-caddy
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      FBM_DOMAIN: ${FBM_DOMAIN:?FBM_DOMAIN is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${FBM_CADDY_DIR:-./caddy}/data:/data
+      - ${FBM_CADDY_DIR:-./caddy}/config:/config
+    networks:
+      - fbm_internal
+    healthcheck:
+      test: ['CMD', 'caddy', 'version']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  fbm_internal:
+    driver: bridge

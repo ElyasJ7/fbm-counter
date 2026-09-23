@@ -46,6 +46,12 @@ RUN addgroup -S fbm && adduser -S -G fbm fbm \
 
 COPY --from=build --chown=fbm:fbm /deploy/ ./
 
+# Prisma CLI for production `prisma migrate deploy` (ops only; not used at runtime).
+# Admin bootstrap script (ops).
+COPY --chown=fbm:fbm deploy/create-admin.cjs /app/deploy/create-admin.cjs
+RUN npm install -g prisma@6.19.0 \
+ && chown -R fbm:fbm /app
+
 USER fbm
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

@@ -1,0 +1,32 @@
+# Same-origin HTTPS front door for FBM Counter.
+# Set FBM_DOMAIN in the environment (e.g. fbm.example.com).
+# Caddy obtains and renews Let's Encrypt certificates automatically.
+
+{$FBM_DOMAIN} {
+	encode gzip
+
+	# NestJS API (prefix /api is already on the app)
+	handle /api* {
+		reverse_proxy api:3001 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up Host {host}
+		}
+	}
+
+	# React SPA (nginx container)
+	handle {
+		reverse_proxy web:8080 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up Host {host}
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
