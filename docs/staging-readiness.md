@@ -2,6 +2,23 @@
 
 Use this before promoting a build from local/CI to a shared staging environment.
 
+## Local staging (this repo)
+
+Quick start on the developer machine (Docker Desktop):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/staging-up.ps1
+```
+
+- Web: http://127.0.0.1:8081  
+- API: http://127.0.0.1:3002/api  
+- DB: localhost:5433 / `fbm_counter_staging`  
+- Secrets: `deploy/staging.env` (gitignored; generated from `deploy/staging.env.example`)  
+- Admin: created by `scripts/create-staging-admin.mjs` (password printed once)  
+- Note: `COOKIE_SECURE=true` means browser session cookies need HTTPS; API login still works for smoke tests.
+
+For a public VPS/cloud staging host, continue with the checklist below (HTTPS required).
+
 ## Environment
 
 - [ ] `NODE_ENV=production` (or dedicated staging profile with production-like security)

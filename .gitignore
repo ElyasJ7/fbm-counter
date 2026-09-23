@@ -4,6 +4,7 @@ build
 .env
 .env.*
 !.env.example
+deploy/staging.env
 *.log
 .DS_Store
 coverage
