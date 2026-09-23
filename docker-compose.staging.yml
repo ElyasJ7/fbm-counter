@@ -1,0 +1,90 @@
+# Local / VPS staging stack (production-like).
+# Usage:
+#   1. Copy deploy/staging.env.example → deploy/staging.env and fill secrets
+#   2. pwsh scripts/staging-up.ps1
+#
+# Ports (avoid colliding with local dev / golive):
+#   Postgres 5433 · API 3002 · Web 8081
+
+name: fbm-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fbm-staging-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fbm
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD:?set STAGING_DB_PASSWORD in deploy/staging.env}
+      POSTGRES_DB: fbm_counter_staging
+    ports:
+      - '5433:5432'
+    volumes:
+      - fbm_staging_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fbm -d fbm_counter_staging']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: fbm-api:staging
+    container_name: fbm-staging-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - deploy/staging.env
+    environment:
+      NODE_ENV: production
+      API_PORT: 3001
+      API_PREFIX: api
+      DATABASE_URL: postgresql://fbm:${STAGING_DB_PASSWORD}@postgres:5432/fbm_counter_staging?schema=public
+      CORS_ORIGIN: ${STAGING_WEB_ORIGIN:-http://127.0.0.1:8081}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      ALLOW_SEED: 'false'
+      STORAGE_DRIVER: local
+      UPLOAD_DIR: /app/uploads
+      FX_PROVIDER: ${FX_PROVIDER:-none}
+      FX_API_KEY: ${FX_API_KEY:-}
+    ports:
+      - '3002:3001'
+    volumes:
+      - fbm_staging_uploads:/app/uploads
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/api/health']
+      interval: 15s
+      timeout: 5s
+      start_period: 25s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${STAGING_API_PUBLIC_URL:-http://127.0.0.1:3002/api}
+    image: fbm-web:staging
+    container_name: fbm-staging-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '8081:8080'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+volumes:
+  fbm_staging_pg_data:
+  fbm_staging_uploads:

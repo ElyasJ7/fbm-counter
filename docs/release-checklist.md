@@ -9,9 +9,9 @@ Mark each gate **Yes** / **No**. Do not ship with any **No** on Critical gates u
 
 | Gate | Yes/No |
 |------|--------|
-| CI green on release commit (quality + docker jobs) | **No** — commit not pushed; remote CI not run |
-| All Prisma migrations applied on target DB | **Yes** (local `fbm_counter`, 12 migrations) |
-| Production/staging env validation passes at API boot | **No** — staging/prod not deployed this run |
+| CI green on release commit (quality + docker jobs) | **Yes** (GitHub Actions #5, 2026-09-23) |
+| All Prisma migrations applied on target DB | **Yes** (local staging DB, 12 migrations) |
+| Production/staging env validation passes at API boot | **Yes** (local staging containers, `NODE_ENV=production`) |
 | Backup completed immediately before deploy | **No** — deploy not started |
 | Restore drill passed on isolated DB within last 90 days | **Yes** — prior go-live verification (2026-09-19) |
 | `ALLOW_SEED` not enabled on production | **No** — production env not configured this run |
@@ -48,14 +48,21 @@ Mark each gate **Yes** / **No**. Do not ship with any **No** on Critical gates u
 
 ## Remaining before production go-live
 
-1. Push release commits and confirm GitHub Actions green  
-2. Deploy staging with production-like env (`docs/staging-readiness.md`)  
+1. ~~Push release commits and confirm GitHub Actions green~~ **Done** (2026-09-23)
+2. ~~Deploy staging with production-like env~~ **Done locally** — `docker compose -f docker-compose.staging.yml` (ports 8081 / 3002 / 5433); run `scripts/staging-up.ps1`
 3. Decide FX: live provider (`FX_PROVIDER` + `FX_API_KEY`) or manual rates only  
-4. Create real admin users (no seed passwords); `ALLOW_SEED=false`  
-5. HTTPS + private document storage on target host  
-6. Pre-deploy backup + `/api/health/ready` on staging/prod  
+4. ~~Create real admin users (no seed passwords); `ALLOW_SEED=false`~~ **Done on local staging** (`admin@staging.local`)
+5. HTTPS + private document storage on target host (**still required** for public/VPS staging — local HTTP cannot use Secure cookies in the browser)
+6. Pre-deploy backup + `/api/health/ready` on real staging/prod host  
 7. Engineering / Ops / Business sign-off below  
 
+### Local staging URLs (this machine)
+
+| Service | URL |
+|---------|-----|
+| Web | http://127.0.0.1:8081 |
+| API | http://127.0.0.1:3002/api |
+| DB | localhost:5433 / `fbm_counter_staging` |
 ## Sign-off
 
 | Role | Name | Date |
