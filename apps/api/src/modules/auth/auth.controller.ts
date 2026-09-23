@@ -1,11 +1,15 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
-import { Public } from '../../common/decorators/auth.decorators';
+import {
+  Public,
+  Roles,
+} from '../../common/decorators/auth.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthUserDto } from '@fbm/shared';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -48,5 +52,18 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthUserDto) {
     return this.authService.me(user.id);
+  }
+
+  /** Any authenticated role may update their own display preferences. */
+  @Roles('ADMIN', 'MANAGEMENT', 'ACCOUNTING', 'PROJECT_MANAGER', 'VIEWER')
+  @Patch('me/preferences')
+  updatePreferences(
+    @CurrentUser() user: AuthUserDto,
+    @Body() dto: UpdatePreferencesDto,
+  ) {
+    return this.authService.updatePreferences(
+      user.id,
+      dto.preferredDisplayCurrency,
+    );
   }
 }

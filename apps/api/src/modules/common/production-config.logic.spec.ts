@@ -44,4 +44,27 @@ describe('validateProductionEnv', () => {
     });
     expect(result.ok).toBe(false);
   });
+
+  it('requires FX_API_KEY when FX_PROVIDER is enabled in production', () => {
+    const result = validateProductionEnv({
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@db:5432/db',
+      JWT_ACCESS_SECRET: 'a'.repeat(40),
+      CORS_ORIGIN: 'https://app.example.com',
+      FX_PROVIDER: 'openexchangerates',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/FX_API_KEY/);
+  });
+
+  it('allows FX_PROVIDER=none without API key in production', () => {
+    const result = validateProductionEnv({
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://u:p@db:5432/db',
+      JWT_ACCESS_SECRET: 'a'.repeat(40),
+      CORS_ORIGIN: 'https://app.example.com',
+      FX_PROVIDER: 'none',
+    });
+    expect(result).toEqual({ ok: true, warnings: [] });
+  });
 });

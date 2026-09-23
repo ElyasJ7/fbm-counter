@@ -51,8 +51,13 @@ export function FinancesPage() {
     : false;
 
   const dashboardQuery = useQuery({
-    queryKey: ['dashboard', 'finances'],
-    queryFn: fetchDashboard,
+    queryKey: [
+      'dashboard',
+      'finances',
+      user?.preferredDisplayCurrency ?? 'company-default',
+    ],
+    queryFn: () =>
+      fetchDashboard(user?.preferredDisplayCurrency ?? undefined),
     enabled: canRead,
   });
 

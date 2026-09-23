@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -31,6 +31,7 @@ import {
   YAxis,
 } from 'recharts';
 import { ProjectStatusBadge } from '../components/projects/ProjectStatusBadge';
+import { FxRateIndicator } from '../components/currency/FxRateIndicator';
 import { DashboardKpiCard } from '../components/dashboard/DashboardKpiCard';
 import { DashboardSection } from '../components/dashboard/DashboardSection';
 import { InvoiceStatusBadge } from '../components/finance/StatusBadges';
@@ -42,6 +43,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { Skeleton, SkeletonCard } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
+import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { ApiError } from '../lib/api';
 import { formatCurrency, formatDateDe } from '../lib/format';
 import { cn } from '../lib/cn';
@@ -178,6 +180,7 @@ function DashboardSkeleton() {
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const { syncFromServer } = useDisplayCurrency();
   const canReadInvoices = user
     ? roleHasPermission(user.role, 'invoices:read')
     : false;
@@ -195,9 +198,19 @@ export function DashboardPage() {
     : false;
 
   const query = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
+    queryKey: [
+      'dashboard',
+      user?.preferredDisplayCurrency ?? 'company-default',
+    ],
+    queryFn: () =>
+      fetchDashboard(user?.preferredDisplayCurrency ?? undefined),
   });
+
+  useEffect(() => {
+    if (query.data?.displayCurrency) {
+      syncFromServer(query.data.displayCurrency);
+    }
+  }, [query.data?.displayCurrency, syncFromServer]);
 
   const customerInvoicesQuery = useQuery({
     queryKey: ['dashboard', 'invoices', 'customer'],
@@ -263,7 +276,7 @@ export function DashboardPage() {
   }
 
   const data = query.data;
-  const { kpis, charts, comparisons, currency, generatedAt } = data;
+  const { kpis, charts, comparisons, currency, generatedAt, fx } = data;
   const asOf = formatDateDe(generatedAt);
 
   const cashFlowData = charts.monthlyCashFlow.map((row) => ({
@@ -395,6 +408,8 @@ export function DashboardPage() {
           </div>
         }
       />
+
+      <FxRateIndicator fx={fx} />
 
       {!comparisons.previousPeriodAvailable && comparisons.note ? (
         <p className="text-helper -mt-3">{comparisons.note}</p>

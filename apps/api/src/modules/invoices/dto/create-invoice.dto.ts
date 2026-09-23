@@ -3,6 +3,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumberString,
   IsOptional,
@@ -13,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { InvoiceStatus, InvoiceType } from '@prisma/client';
+import { SUPPORTED_CURRENCIES } from '@fbm/shared';
 
 export class InvoiceItemDto {
   @IsString()
@@ -70,6 +72,11 @@ export class CreateInvoiceDto {
 
   @IsNumberString()
   netAmount!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
 
   @IsOptional()
   @IsNumberString()

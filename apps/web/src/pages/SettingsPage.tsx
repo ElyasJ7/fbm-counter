@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { roleHasPermission } from '@fbm/shared';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  CURRENCY_LABELS,
+  DEFAULT_CURRENCY,
+  DEFAULT_DISPLAY_CURRENCY,
+  DEFAULT_TIMEZONE,
+  roleHasPermission,
+  SUPPORTED_CURRENCIES,
+  SUPPORTED_TIMEZONES,
+  TIMEZONE_LABELS,
+  type SupportedCurrency,
+  type SupportedTimezone,
+} from '@fbm/shared';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -8,9 +19,15 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { FormSection } from '../components/ui/FormSection';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Select } from '../components/ui/Select';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
+import { formatDateDe } from '../lib/format';
+import {
+  fetchLatestExchangeRates,
+  refreshExchangeRates,
+} from '../services/exchange-rates';
 import {
   fetchSettings,
   updateSettings,
@@ -28,10 +45,48 @@ const emptyForm: SettingsInput = {
   taxNumber: '',
   iban: '',
   bic: '',
-  defaultCurrency: 'EUR',
+  defaultCurrency: DEFAULT_CURRENCY,
+  defaultDisplayCurrency: DEFAULT_DISPLAY_CURRENCY,
+  timezone: DEFAULT_TIMEZONE,
   defaultVatRate: '19',
   invoicePrefix: 'INV',
 };
+
+function settingsToForm(data: {
+  companyName: string;
+  legalName: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string;
+  vatId: string | null;
+  taxNumber: string | null;
+  iban: string | null;
+  bic: string | null;
+  defaultCurrency: string;
+  defaultDisplayCurrency: string;
+  timezone: string;
+  defaultVatRate: string;
+  invoicePrefix: string;
+}): SettingsInput {
+  return {
+    companyName: data.companyName,
+    legalName: data.legalName ?? '',
+    street: data.street ?? '',
+    postalCode: data.postalCode ?? '',
+    city: data.city ?? '',
+    country: data.country,
+    vatId: data.vatId ?? '',
+    taxNumber: data.taxNumber ?? '',
+    iban: data.iban ?? '',
+    bic: data.bic ?? '',
+    defaultCurrency: data.defaultCurrency,
+    defaultDisplayCurrency: data.defaultDisplayCurrency,
+    timezone: data.timezone,
+    defaultVatRate: data.defaultVatRate,
+    invoicePrefix: data.invoicePrefix,
+  };
+}
 
 function Field({
   label,
@@ -64,6 +119,24 @@ export function SettingsPage() {
   const [form, setForm] = useState<SettingsInput>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const currencyOptions = useMemo(
+    () =>
+      SUPPORTED_CURRENCIES.map((code) => ({
+        value: code,
+        label: CURRENCY_LABELS[code],
+      })),
+    [],
+  );
+
+  const timezoneOptions = useMemo(
+    () =>
+      SUPPORTED_TIMEZONES.map((tz) => ({
+        value: tz,
+        label: TIMEZONE_LABELS[tz],
+      })),
+    [],
+  );
+
   const query = useQuery({
     queryKey: ['settings'],
     queryFn: fetchSettings,
@@ -71,23 +144,26 @@ export function SettingsPage() {
     retry: false,
   });
 
+  const ratesQuery = useQuery({
+    queryKey: ['exchange-rates', 'latest'],
+    queryFn: fetchLatestExchangeRates,
+    enabled: canRead,
+    retry: false,
+  });
+
+  const canManageFx =
+    user?.role === 'ADMIN' || user?.role === 'MANAGEMENT';
+
+  const refreshRatesMutation = useMutation({
+    mutationFn: refreshExchangeRates,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['exchange-rates'] });
+    },
+  });
+
   useEffect(() => {
     if (!query.data) return;
-    setForm({
-      companyName: query.data.companyName,
-      legalName: query.data.legalName ?? '',
-      street: query.data.street ?? '',
-      postalCode: query.data.postalCode ?? '',
-      city: query.data.city ?? '',
-      country: query.data.country,
-      vatId: query.data.vatId ?? '',
-      taxNumber: query.data.taxNumber ?? '',
-      iban: query.data.iban ?? '',
-      bic: query.data.bic ?? '',
-      defaultCurrency: query.data.defaultCurrency,
-      defaultVatRate: query.data.defaultVatRate,
-      invoicePrefix: query.data.invoicePrefix,
-    });
+    setForm(settingsToForm(query.data));
   }, [query.data]);
 
   const saveMutation = useMutation({
@@ -103,7 +179,13 @@ export function SettingsPage() {
         taxNumber: form.taxNumber?.trim() || undefined,
         iban: form.iban?.trim() || undefined,
         bic: form.bic?.trim() || undefined,
-        defaultCurrency: form.defaultCurrency?.trim().toUpperCase() || 'EUR',
+        defaultCurrency: (form.defaultCurrency?.trim().toUpperCase() ||
+          DEFAULT_CURRENCY) as SupportedCurrency,
+        defaultDisplayCurrency: (form.defaultDisplayCurrency
+          ?.trim()
+          .toUpperCase() || DEFAULT_DISPLAY_CURRENCY) as SupportedCurrency,
+        timezone: (form.timezone?.trim() ||
+          DEFAULT_TIMEZONE) as SupportedTimezone,
         defaultVatRate: form.defaultVatRate?.trim() || '19',
         invoicePrefix: form.invoicePrefix?.trim().toUpperCase() || 'INV',
       };
@@ -123,11 +205,8 @@ export function SettingsPage() {
 
   if (!canRead) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Settings"
-          description="Company profile and application preferences."
-        />
+      <div>
+        <PageHeader title="Settings" />
         <EmptyState
           title="No access"
           description="Your role cannot view company settings."
@@ -138,32 +217,25 @@ export function SettingsPage() {
 
   if (query.isLoading) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Settings"
-          description="Company profile and application preferences."
-        />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SkeletonCard className="h-48" />
-          <SkeletonCard className="h-48" />
-          <SkeletonCard className="h-32 lg:col-span-2" />
-        </div>
+      <div>
+        <PageHeader title="Settings" />
+        <SkeletonCard />
       </div>
     );
   }
 
   if (query.error || !query.data) {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Settings"
-          description="Company profile and application preferences."
+      <div>
+        <PageHeader title="Settings" />
+        <EmptyState
+          title="Could not load settings"
+          description={
+            query.error instanceof ApiError
+              ? query.error.message
+              : 'Unexpected error'
+          }
         />
-        <Alert tone="danger" title="Could not load settings">
-          {query.error instanceof ApiError
-            ? query.error.message
-            : 'Unexpected error'}
-        </Alert>
       </div>
     );
   }
@@ -171,18 +243,13 @@ export function SettingsPage() {
   const settings = query.data;
 
   return (
-    <div className="space-y-6">
+    <div>
       <PageHeader
         title="Settings"
-        description="Company profile and application preferences."
+        description="Company profile, currency, region, and invoice defaults."
         actions={
           canWrite && !editing ? (
-            <Button
-              onClick={() => {
-                setEditing(true);
-                setFormError(null);
-              }}
-            >
+            <Button type="button" onClick={() => setEditing(true)}>
               Edit
             </Button>
           ) : null
@@ -190,23 +257,23 @@ export function SettingsPage() {
       />
 
       {editing && canWrite ? (
-        <Card title="Edit company settings">
+        <Card title="Edit settings">
           <form
-            className="space-y-8"
+            className="space-y-6"
             onSubmit={(e) => {
               e.preventDefault();
               saveMutation.mutate();
             }}
           >
-            <FormSection title="Company profile">
+            <FormSection title="Company">
               <Input
                 label="Company name"
                 name="companyName"
+                required
                 value={form.companyName}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, companyName: e.target.value }))
                 }
-                required
               />
               <Input
                 label="Legal name"
@@ -291,11 +358,13 @@ export function SettingsPage() {
               />
             </FormSection>
 
-            <FormSection title="Defaults">
-              <Input
-                label="Default currency"
+            <FormSection title="Currency & region">
+              <Select
+                label="Base currency"
                 name="defaultCurrency"
-                value={form.defaultCurrency ?? 'EUR'}
+                hint="Books and accounting home currency. Changing this does not rewrite historical amounts."
+                value={form.defaultCurrency ?? DEFAULT_CURRENCY}
+                options={currencyOptions}
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
@@ -303,6 +372,35 @@ export function SettingsPage() {
                   }))
                 }
               />
+              <Select
+                label="Default display currency"
+                name="defaultDisplayCurrency"
+                hint="Default UI reporting currency (user preference comes later)."
+                value={form.defaultDisplayCurrency ?? DEFAULT_DISPLAY_CURRENCY}
+                options={currencyOptions}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    defaultDisplayCurrency: e.target.value,
+                  }))
+                }
+              />
+              <Select
+                label="Timezone"
+                name="timezone"
+                hint="Regional preference. Business calendar dates stay date-only / UTC-safe."
+                value={form.timezone ?? DEFAULT_TIMEZONE}
+                options={timezoneOptions}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    timezone: e.target.value,
+                  }))
+                }
+              />
+            </FormSection>
+
+            <FormSection title="Invoice defaults">
               <Input
                 label="Default VAT %"
                 name="defaultVatRate"
@@ -328,7 +426,8 @@ export function SettingsPage() {
             </FormSection>
             <p className="-mt-4 text-xs text-muted">
               The invoice prefix applies to customer invoices. Supplier invoices
-              continue to use the SI prefix.
+              continue to use the SI prefix. Supported currencies: AFN, EUR,
+              USD.
             </p>
 
             {formError ? <Alert tone="danger">{formError}</Alert> : null}
@@ -344,21 +443,7 @@ export function SettingsPage() {
                   setEditing(false);
                   setFormError(null);
                   if (query.data) {
-                    setForm({
-                      companyName: query.data.companyName,
-                      legalName: query.data.legalName ?? '',
-                      street: query.data.street ?? '',
-                      postalCode: query.data.postalCode ?? '',
-                      city: query.data.city ?? '',
-                      country: query.data.country,
-                      vatId: query.data.vatId ?? '',
-                      taxNumber: query.data.taxNumber ?? '',
-                      iban: query.data.iban ?? '',
-                      bic: query.data.bic ?? '',
-                      defaultCurrency: query.data.defaultCurrency,
-                      defaultVatRate: query.data.defaultVatRate,
-                      invoicePrefix: query.data.invoicePrefix,
-                    });
+                    setForm(settingsToForm(query.data));
                   }
                 }}
               >
@@ -389,9 +474,123 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card title="Defaults" className="lg:col-span-2">
+          <Card title="Currency & region" className="lg:col-span-2">
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Default currency" value={settings.defaultCurrency} />
+              <Field
+                label="Base currency"
+                value={
+                  CURRENCY_LABELS[
+                    settings.defaultCurrency as SupportedCurrency
+                  ] ?? settings.defaultCurrency
+                }
+              />
+              <Field
+                label="Default display currency"
+                value={
+                  CURRENCY_LABELS[
+                    settings.defaultDisplayCurrency as SupportedCurrency
+                  ] ?? settings.defaultDisplayCurrency
+                }
+              />
+              <Field
+                label="Timezone"
+                value={
+                  TIMEZONE_LABELS[settings.timezone as SupportedTimezone] ??
+                  settings.timezone
+                }
+              />
+            </div>
+          </Card>
+
+          <Card
+            title="Exchange rates"
+            className="lg:col-span-2"
+            actions={
+              canManageFx ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    refreshRatesMutation.isPending ||
+                    ratesQuery.data?.providerConfigured === false
+                  }
+                  onClick={() => refreshRatesMutation.mutate()}
+                >
+                  {refreshRatesMutation.isPending
+                    ? 'Refreshing…'
+                    : 'Refresh rates'}
+                </Button>
+              ) : null
+            }
+          >
+            {ratesQuery.isLoading ? (
+              <p className="text-sm text-muted">Loading rates…</p>
+            ) : null}
+            {ratesQuery.error ? (
+              <Alert tone="danger">
+                {ratesQuery.error instanceof ApiError
+                  ? ratesQuery.error.message
+                  : 'Could not load exchange rates'}
+              </Alert>
+            ) : null}
+            {ratesQuery.data ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted">
+                  {ratesQuery.data.providerConfigured
+                    ? 'Live FX provider is configured.'
+                    : 'No live FX provider configured (FX_PROVIDER=none). Cached or manual rates still apply.'}
+                  {ratesQuery.data.lastUpdatedAt
+                    ? ` Last updated: ${formatDateDe(ratesQuery.data.lastUpdatedAt.slice(0, 10))} ${ratesQuery.data.lastUpdatedAt.slice(11, 16)} UTC.`
+                    : ' No rates stored yet.'}
+                </p>
+                {refreshRatesMutation.error ? (
+                  <Alert tone="danger">
+                    {refreshRatesMutation.error instanceof ApiError
+                      ? refreshRatesMutation.error.message
+                      : 'Refresh failed'}
+                  </Alert>
+                ) : null}
+                {ratesQuery.data.rates.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    No exchange rates available. Configure FX_PROVIDER /
+                    FX_API_KEY and refresh, or wait for Phase D+ conversion UI.
+                  </p>
+                ) : (
+                  <div className="table-scroll">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="border-b border-[var(--color-border)] text-muted">
+                        <tr>
+                          <th className="px-2 py-2 font-medium">Pair</th>
+                          <th className="px-2 py-2 font-medium">Rate</th>
+                          <th className="px-2 py-2 font-medium">Source</th>
+                          <th className="px-2 py-2 font-medium">Provider</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ratesQuery.data.rates.map((row) => (
+                          <tr
+                            key={row.id}
+                            className="border-b border-slate-100"
+                          >
+                            <td className="px-2 py-2 font-medium">
+                              1 {row.baseCurrency} → {row.quoteCurrency}
+                            </td>
+                            <td className="px-2 py-2">{row.rate}</td>
+                            <td className="px-2 py-2">{row.source}</td>
+                            <td className="px-2 py-2">{row.provider}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </Card>
+
+          <Card title="Invoice defaults" className="lg:col-span-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Default VAT"
                 value={`${settings.defaultVatRate} %`}

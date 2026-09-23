@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsNumberString,
   IsOptional,
   IsString,
@@ -8,6 +9,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { BudgetCategory, ExpenseStatus, PaymentMethod } from '@prisma/client';
+import { SUPPORTED_CURRENCIES } from '@fbm/shared';
 
 export class CreateExpenseDto {
   @IsOptional()
@@ -47,6 +49,11 @@ export class CreateExpenseDto {
 
   @IsNumberString()
   netAmount!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
 
   @IsOptional()
   @IsNumberString()

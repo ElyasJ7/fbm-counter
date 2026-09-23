@@ -125,7 +125,79 @@ export const GERMAN_VAT_RATES = {
   zero: 0,
 } as const;
 
-export const DEFAULT_CURRENCY = 'EUR' as const;
+/** Supported transaction / display currencies (Phase B+). */
+export const SUPPORTED_CURRENCIES = ['AFN', 'EUR', 'USD'] as const;
+
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
+/** Company base currency default for new installs (legacy EUR semantics). */
+export const DEFAULT_CURRENCY: SupportedCurrency = 'EUR';
+
+/** Default display currency mirrors base until the user changes it. */
+export const DEFAULT_DISPLAY_CURRENCY: SupportedCurrency = DEFAULT_CURRENCY;
+
+export const CURRENCY_LABELS: Record<SupportedCurrency, string> = {
+  AFN: 'Afghan Afghani (AFN)',
+  EUR: 'Euro (EUR)',
+  USD: 'US Dollar (USD)',
+};
+
+export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
+  AFN: '؋',
+  EUR: '€',
+  USD: '$',
+};
+
+export function isSupportedCurrency(value: string): value is SupportedCurrency {
+  return (SUPPORTED_CURRENCIES as readonly string[]).includes(
+    value.trim().toUpperCase(),
+  );
+}
+
+export function assertSupportedCurrency(value: string): SupportedCurrency {
+  const code = value.trim().toUpperCase();
+  if (!isSupportedCurrency(code)) {
+    throw new Error(
+      `Unsupported currency "${value}". Allowed: ${SUPPORTED_CURRENCIES.join(', ')}`,
+    );
+  }
+  return code;
+}
+
+/** Supported company timezones (date-only business dates remain UTC-safe). */
+export const SUPPORTED_TIMEZONES = [
+  'UTC',
+  'Asia/Kabul',
+  'Europe/Berlin',
+  'Europe/London',
+  'America/New_York',
+] as const;
+
+export type SupportedTimezone = (typeof SUPPORTED_TIMEZONES)[number];
+
+export const DEFAULT_TIMEZONE: SupportedTimezone = 'UTC';
+
+export const TIMEZONE_LABELS: Record<SupportedTimezone, string> = {
+  UTC: 'UTC',
+  'Asia/Kabul': 'Asia/Kabul (Afghanistan)',
+  'Europe/Berlin': 'Europe/Berlin',
+  'Europe/London': 'Europe/London',
+  'America/New_York': 'America/New_York',
+};
+
+export function isSupportedTimezone(value: string): value is SupportedTimezone {
+  return (SUPPORTED_TIMEZONES as readonly string[]).includes(value.trim());
+}
+
+export function assertSupportedTimezone(value: string): SupportedTimezone {
+  const tz = value.trim();
+  if (!isSupportedTimezone(tz)) {
+    throw new Error(
+      `Unsupported timezone "${value}". Allowed: ${SUPPORTED_TIMEZONES.join(', ')}`,
+    );
+  }
+  return tz;
+}
 
 export const APP_NAME = 'FBM Counter';
 export const APP_COMPANY_PLACEHOLDER = 'Sample Construction Ltd';
@@ -136,6 +208,8 @@ export type AuthUserDto = {
   firstName: string;
   lastName: string;
   role: Role;
+  /** Preferred UI reporting currency; null uses company defaultDisplayCurrency. */
+  preferredDisplayCurrency: string | null;
 };
 
 export type ApiErrorBody = {
@@ -411,6 +485,8 @@ export type ExpenseDto = {
   taxAmount: string;
   grossAmount: string;
   paidAmount: string;
+  /** Transaction currency (AFN | EUR | USD). */
+  currency: string;
   status: ExpenseStatus;
   paymentDate: string | null;
   paymentMethod: PaymentMethod | null;
@@ -444,6 +520,8 @@ export type InvoiceDto = {
   taxAmount: string;
   grossAmount: string;
   paidAmount: string;
+  /** Transaction currency (AFN | EUR | USD). */
+  currency: string;
   status: InvoiceStatus;
   paymentTerms: string | null;
   notes: string | null;
@@ -462,6 +540,8 @@ export type PaymentDto = {
   projectId: string | null;
   paymentDate: string;
   amount: string;
+  /** Matches invoice transaction currency (cross-currency deferred). */
+  currency: string;
   type: PaymentType;
   method: PaymentMethod;
   reference: string | null;
@@ -474,6 +554,7 @@ export type PaymentDto = {
     invoiceNumber: string;
     type: InvoiceType;
     status: InvoiceStatus;
+    currency?: string;
   };
   project: ProjectRefDto | null;
 };
@@ -648,8 +729,23 @@ export type ReportExpenseCategoryDto = {
   amount: string;
 };
 
+/** FX metadata for dashboard / reports display conversion. */
+export type DisplayFxMetaDto = {
+  status: MoneyConversionStatus;
+  baseCurrency: string;
+  displayCurrency: string;
+  exchangeRate: string | null;
+  effectiveAt: string | null;
+  fetchedAt: string | null;
+  provider: string | null;
+};
+
 export type ReportsSummaryDto = {
+  /** Amounts are labeled in this currency (books if FX unavailable). */
   currency: string;
+  baseCurrency: string;
+  displayCurrency: string;
+  fx: DisplayFxMetaDto;
   generatedAt: string;
   period: ReportPeriodDto;
   kpis: ReportKpisDto;
@@ -670,11 +766,59 @@ export type CompanySettingsDto = {
   taxNumber: string | null;
   iban: string | null;
   bic: string | null;
+  /** Company base / books currency (AFN | EUR | USD). */
   defaultCurrency: string;
+  /** Default UI reporting currency for users without a personal preference. */
+  defaultDisplayCurrency: string;
+  /** Company timezone for regional display (business dates remain date-only/UTC). */
+  timezone: string;
   defaultVatRate: string;
   invoicePrefix: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export const EXCHANGE_RATE_SOURCES = ['PROVIDER', 'MANUAL'] as const;
+export type ExchangeRateSource = (typeof EXCHANGE_RATE_SOURCES)[number];
+
+export type ExchangeRateDto = {
+  id: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  rate: string;
+  provider: string;
+  source: ExchangeRateSource;
+  effectiveAt: string;
+  fetchedAt: string;
+  reason: string | null;
+  createdById: string | null;
+  createdAt: string;
+};
+
+export type ExchangeRatesLatestDto = {
+  rates: ExchangeRateDto[];
+  lastUpdatedAt: string | null;
+  providerConfigured: boolean;
+};
+
+/** Result of a centralized FX conversion (display or accounting). */
+export type MoneyConversionStatus = 'converted' | 'identity' | 'unavailable';
+
+export type MoneyConversionResultDto = {
+  status: MoneyConversionStatus;
+  originalAmount: string;
+  originalCurrency: string;
+  /** Null when status === unavailable. */
+  convertedAmount: string | null;
+  convertedCurrency: string;
+  exchangeRate: string | null;
+  effectiveAt: string | null;
+  fetchedAt: string | null;
+  source: ExchangeRateSource | 'IDENTITY' | null;
+  provider: string | null;
+  rateId: string | null;
+  /** true when using current/latest rate for UI display (not a booking snapshot). */
+  isDisplayConversion: boolean;
 };
 
 export const USER_STATUSES = ['ACTIVE', 'INACTIVE', 'INVITED'] as const;
@@ -694,6 +838,7 @@ export type UserDto = {
   lastName: string;
   role: Role;
   status: UserStatus;
+  preferredDisplayCurrency: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 };

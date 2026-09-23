@@ -66,6 +66,7 @@ describe('PaymentsService concurrent overpayment guard', () => {
       firstName: user.firstName,
       lastName: user.lastName,
       role: 'ACCOUNTING',
+      preferredDisplayCurrency: user.preferredDisplayCurrency ?? null,
     };
 
     const customer = await prisma.customer.create({

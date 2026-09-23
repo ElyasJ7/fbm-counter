@@ -96,6 +96,8 @@ async function main() {
     iban: 'DE89370400440532013000',
     bic: 'COBADEFFXXX',
     defaultCurrency: 'EUR',
+    defaultDisplayCurrency: 'EUR',
+    timezone: 'UTC',
     defaultVatRate: 19.0,
     invoicePrefix: 'INV',
   };

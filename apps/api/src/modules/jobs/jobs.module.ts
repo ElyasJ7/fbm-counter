@@ -2,15 +2,17 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { DocumentsModule } from '../documents/documents.module';
+import { ExchangeRatesModule } from '../exchange-rates/exchange-rates.module';
 import { OverdueInvoicesJob } from './overdue-invoices.job';
 import { DocumentBlobGcJob } from './document-blob-gc.job';
+import { ExchangeRatesRefreshJob } from './exchange-rates-refresh.job';
 import {
   DOCUMENT_BLOB_GC_CONFIG,
   DocumentBlobGcService,
 } from './document-blob-gc.service';
 
 @Module({
-  imports: [NotificationsModule, DocumentsModule],
+  imports: [NotificationsModule, DocumentsModule, ExchangeRatesModule],
   providers: [
     OverdueInvoicesJob,
     {
@@ -27,6 +29,7 @@ import {
     },
     DocumentBlobGcService,
     DocumentBlobGcJob,
+    ExchangeRatesRefreshJob,
   ],
   exports: [OverdueInvoicesJob, DocumentBlobGcService],
 })

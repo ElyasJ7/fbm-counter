@@ -40,6 +40,7 @@ export type ExpenseInput = {
   invoiceDate?: string;
   dueDate?: string;
   netAmount: string;
+  currency?: string;
   taxRate?: string;
   status?: ExpenseStatus;
   paymentDate?: string;
@@ -64,6 +65,7 @@ export type InvoiceInput = {
   issueDate: string;
   dueDate: string;
   netAmount: string;
+  currency?: string;
   taxRate?: string;
   status?: InvoiceStatus;
   paymentTerms?: string;
@@ -76,6 +78,7 @@ export type PaymentInput = {
   projectId?: string;
   paymentDate: string;
   amount: string;
+  currency?: string;
   method?: PaymentMethod;
   reference?: string;
   bankReference?: string;

@@ -7,6 +7,7 @@ import { apiDownloadUrl, apiRequest } from '../lib/api';
 export type ReportsQuery = {
   from?: string;
   to?: string;
+  currency?: string;
 };
 
 function toQueryString(
@@ -18,6 +19,7 @@ function toQueryString(
   const query = new URLSearchParams();
   if (params.from) query.set('from', params.from);
   if (params.to) query.set('to', params.to);
+  if (params.currency) query.set('currency', params.currency);
   if (params.type) query.set('type', params.type);
   if (params.format) query.set('format', params.format);
   const qs = query.toString();

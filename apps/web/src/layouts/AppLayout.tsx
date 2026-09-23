@@ -3,6 +3,7 @@ import {
   ChartColumn,
   ChevronsLeft,
   ChevronsRight,
+  CircleDollarSign,
   Contact,
   CreditCard,
   FileText,
@@ -26,6 +27,7 @@ import { APP_NAME, ROLE_LABELS, roleHasPermission, type Permission } from '@fbm/
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { PageContainer } from '../components/ui/PageContainer';
+import { DisplayCurrencySelector } from '../components/currency/DisplayCurrencySelector';
 import { GlobalSearch } from '../components/GlobalSearch';
 import { NotificationsBell } from '../components/NotificationsBell';
 import { useAuth } from '../hooks/useAuth';
@@ -91,6 +93,12 @@ const navGroups: NavGroup[] = [
         label: 'Expenses',
         icon: Receipt,
         permission: 'expenses:read',
+      },
+      {
+        to: '/currency-converter',
+        label: 'Currency Converter',
+        icon: CircleDollarSign,
+        permission: 'finances:read',
       },
       {
         to: '/reports',
@@ -411,6 +419,7 @@ export function AppLayout() {
           <GlobalSearch />
 
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <DisplayCurrencySelector />
             <NotificationsBell />
             <div className="hidden items-center gap-2.5 border-l border-border pl-3 sm:flex">
               <div className="min-w-0 text-right">

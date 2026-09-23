@@ -29,6 +29,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { SubcontractorsModule } from './modules/subcontractors/subcontractors.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { UsersModule } from './modules/users/users.module';
+import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { UsersModule } from './modules/users/users.module';
     AuditModule,
     JobsModule,
     HealthModule,
+    ExchangeRatesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

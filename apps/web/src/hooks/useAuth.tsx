@@ -17,6 +17,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  setUser: (user: AuthUserDto | null) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       logout,
       refresh,
+      setUser,
     }),
     [user, isLoading, login, logout, refresh],
   );

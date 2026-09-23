@@ -101,6 +101,11 @@ enum DocumentCategory {
   OTHER
 }
 
+enum ExchangeRateSource {
+  PROVIDER
+  MANUAL
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -109,6 +114,8 @@ model User {
   lastName     String
   role         Role       @default(VIEWER)
   status       UserStatus @default(ACTIVE)
+  /// Preferred UI reporting currency (AFN | EUR | USD). Null → company defaultDisplayCurrency.
+  preferredDisplayCurrency String?
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -119,6 +126,7 @@ model User {
   notifications     Notification[]
   managedProjects   Project[]      @relation("ProjectManager")
   uploadedDocuments Document[]     @relation("DocumentUploader")
+  exchangeRates     ExchangeRate[] @relation("ExchangeRateCreator")
 
   @@index([role])
   @@index([status])
@@ -182,22 +190,27 @@ model Notification {
 }
 
 model CompanySettings {
-  id              String   @id @default(cuid())
-  companyName     String
-  legalName       String?
-  street          String?
-  postalCode      String?
-  city            String?
-  country         String   @default("DE")
-  vatId           String?
-  taxNumber       String?
-  iban            String?
-  bic             String?
-  defaultCurrency String   @default("EUR")
-  defaultVatRate  Decimal  @default(19.00) @db.Decimal(5, 2)
-  invoicePrefix   String   @default("RE")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  companyName            String
+  legalName              String?
+  street                 String?
+  postalCode             String?
+  city                   String?
+  country                String   @default("DE")
+  vatId                  String?
+  taxNumber              String?
+  iban                   String?
+  bic                    String?
+  /// Company base / books currency (AFN | EUR | USD).
+  defaultCurrency        String   @default("EUR")
+  /// Default UI display/reporting currency.
+  defaultDisplayCurrency String   @default("EUR")
+  /// Regional timezone (business calendar dates remain date-only / UTC-safe).
+  timezone               String   @default("UTC")
+  defaultVatRate         Decimal  @default(19.00) @db.Decimal(5, 2)
+  invoicePrefix          String   @default("RE")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   @@map("company_settings")
 }
@@ -371,12 +384,14 @@ model Expense {
   invoiceNumber  String?
   invoiceDate    DateTime?
   dueDate        DateTime?
-  netAmount      Decimal        @db.Decimal(19, 4)
-  taxRate        Decimal        @default(19.00) @db.Decimal(5, 2)
-  taxAmount      Decimal        @db.Decimal(19, 4)
-  grossAmount    Decimal        @db.Decimal(19, 4)
-  paidAmount     Decimal        @default(0) @db.Decimal(19, 4)
-  status         ExpenseStatus  @default(DRAFT)
+  netAmount       Decimal        @db.Decimal(19, 4)
+  taxRate         Decimal        @default(19.00) @db.Decimal(5, 2)
+  taxAmount       Decimal        @db.Decimal(19, 4)
+  grossAmount     Decimal        @db.Decimal(19, 4)
+  paidAmount      Decimal        @default(0) @db.Decimal(19, 4)
+  /// Transaction currency (AFN | EUR | USD). Inherited from project or company books.
+  currency        String         @default("EUR")
+  status          ExpenseStatus  @default(DRAFT)
   paymentDate    DateTime?
   paymentMethod  PaymentMethod?
   notes          String?
@@ -412,6 +427,8 @@ model Invoice {
   taxAmount       Decimal        @db.Decimal(19, 4)
   grossAmount     Decimal        @db.Decimal(19, 4)
   paidAmount      Decimal        @default(0) @db.Decimal(19, 4)
+  /// Transaction currency (AFN | EUR | USD). Inherited from project or company books.
+  currency        String         @default("EUR")
   status          InvoiceStatus  @default(DRAFT)
   paymentTerms    String?
   notes           String?
@@ -458,6 +475,8 @@ model Payment {
   project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   paymentDate   DateTime
   amount        Decimal       @db.Decimal(19, 4)
+  /// Must match invoice.currency (cross-currency payments deferred).
+  currency      String        @default("EUR")
   type          PaymentType
   method        PaymentMethod @default(BANK_TRANSFER)
   reference     String?
@@ -509,4 +528,25 @@ model NumberSequence {
   updatedAt DateTime @updatedAt
 
   @@map("number_sequences")
+}
+
+/// Cached FX rates (provider or manual). Latest row per pair wins for display conversion.
+model ExchangeRate {
+  id            String             @id @default(cuid())
+  baseCurrency  String
+  quoteCurrency String
+  /// Units of quoteCurrency per 1 baseCurrency (Decimal, never Float).
+  rate          Decimal            @db.Decimal(19, 8)
+  provider      String
+  source        ExchangeRateSource @default(PROVIDER)
+  effectiveAt   DateTime
+  fetchedAt     DateTime
+  reason        String?
+  createdById   String?
+  createdBy     User?              @relation("ExchangeRateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+
+  @@index([baseCurrency, quoteCurrency, effectiveAt])
+  @@index([fetchedAt])
+  @@map("exchange_rates")
 }

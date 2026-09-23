@@ -106,5 +106,16 @@ export function validateProductionEnv(
     }
   }
 
+  const fxProvider = (env.FX_PROVIDER ?? 'none').trim().toLowerCase();
+  const fxEnabled =
+    fxProvider !== '' && fxProvider !== 'none' && fxProvider !== 'noop';
+  if (isProd && fxEnabled && !env.FX_API_KEY?.trim()) {
+    return {
+      ok: false,
+      error:
+        'FX_PROVIDER is enabled but FX_API_KEY is missing — refuse to start in production',
+    };
+  }
+
   return { ok: true, warnings };
 }

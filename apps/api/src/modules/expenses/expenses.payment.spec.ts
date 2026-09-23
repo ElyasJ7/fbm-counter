@@ -52,6 +52,7 @@ describe('ExpensesService payment integrity (H4)', () => {
       firstName: admin!.firstName,
       lastName: admin!.lastName,
       role: 'ADMIN',
+      preferredDisplayCurrency: admin!.preferredDisplayCurrency ?? null,
     };
 
     const row = await prisma.expense.create({

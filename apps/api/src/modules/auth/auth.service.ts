@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   UnauthorizedException,
   ForbiddenException,
@@ -8,7 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { createHash, randomBytes } from 'crypto';
 import type { Response } from 'express';
-import type { AuthUserDto } from '@fbm/shared';
+import { assertSupportedCurrency, type AuthUserDto } from '@fbm/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './jwt.strategy';
@@ -30,6 +31,7 @@ export class AuthService {
     firstName: string;
     lastName: string;
     role: AuthUserDto['role'];
+    preferredDisplayCurrency?: string | null;
   }): AuthUserDto {
     return {
       id: user.id,
@@ -37,6 +39,7 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
+      preferredDisplayCurrency: user.preferredDisplayCurrency ?? null,
     };
   }
 
@@ -262,5 +265,39 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
     return this.toAuthUser(user);
+  }
+
+  async updatePreferences(
+    userId: string,
+    preferredDisplayCurrency: string | null | undefined,
+  ): Promise<AuthUserDto> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null, status: 'ACTIVE' },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    let next: string | null = user.preferredDisplayCurrency;
+    if (preferredDisplayCurrency !== undefined) {
+      const raw = preferredDisplayCurrency?.trim() ?? '';
+      if (raw === '') {
+        next = null;
+      } else {
+        try {
+          next = assertSupportedCurrency(raw);
+        } catch {
+          throw new BadRequestException(
+            `Unsupported currency "${raw}". Allowed: AFN, EUR, USD`,
+          );
+        }
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { preferredDisplayCurrency: next },
+    });
+    return this.toAuthUser(updated);
   }
 }

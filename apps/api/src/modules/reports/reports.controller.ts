@@ -17,8 +17,9 @@ export class ReportsController {
     @CurrentUser() user: AuthUserDto,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('currency') currency?: string,
   ) {
-    return this.reportsService.getSummary({ from, to }, user);
+    return this.reportsService.getSummary({ from, to, currency }, user);
   }
 
   @Get('export')
@@ -30,6 +31,7 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('format') format?: string,
+    @Query('currency') currency?: string,
   ) {
     const exportType = (
       REPORT_EXPORT_TYPES.includes(type as ReportExportType) ? type : 'summary'
@@ -38,7 +40,7 @@ export class ReportsController {
     if (format === 'pdf') {
       const file = await this.reportsService.exportPdf(
         exportType,
-        { from, to },
+        { from, to, currency },
         user,
       );
       const encodedName = encodeURIComponent(file.filename);
@@ -50,7 +52,7 @@ export class ReportsController {
 
     const file = await this.reportsService.exportCsv(
       exportType,
-      { from, to },
+      { from, to, currency },
       user,
     );
 

@@ -4,11 +4,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   BUDGET_CATEGORIES,
   BUDGET_CATEGORY_LABELS,
+  CURRENCY_LABELS,
   EXPENSE_STATUSES,
   EXPENSE_STATUS_LABELS,
+  SUPPORTED_CURRENCIES,
   roleHasPermission,
   type BudgetCategory,
   type ExpenseStatus,
+  type SupportedCurrency,
 } from '@fbm/shared';
 import { ExpenseStatusBadge } from '../components/finance/StatusBadges';
 import { Alert } from '../components/ui/Alert';
@@ -49,6 +52,7 @@ const emptyForm: ExpenseInput = {
   status: 'DRAFT',
   projectId: '',
   supplierId: '',
+  currency: undefined,
 };
 
 type ExpensesPageProps = {
@@ -81,6 +85,7 @@ export function ExpensesPage({
   const [form, setForm] = useState<ExpenseInput>({
     ...emptyForm,
     projectId: projectFilter,
+    currency: currency || undefined,
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -113,6 +118,7 @@ export function ExpensesPage({
       const payload: ExpenseInput = {
         description: form.description.trim(),
         netAmount: form.netAmount.trim(),
+        currency: form.currency || currency || undefined,
         taxRate: form.taxRate?.trim() || '19',
         category: form.category || 'OTHER',
         status: form.status || 'DRAFT',
@@ -126,7 +132,11 @@ export function ExpensesPage({
     },
     onSuccess: async () => {
       setShowForm(false);
-      setForm({ ...emptyForm, projectId: projectFilter });
+      setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
       setFormError(null);
       await queryClient.invalidateQueries({ queryKey: ['expenses'] });
       if (projectFilter) {
@@ -219,8 +229,24 @@ export function ExpensesPage({
                 setForm((prev) => ({ ...prev, description: e.target.value }))
               }
             />
+            <Select
+              label="Currency"
+              name="currency"
+              value={form.currency ?? currency ?? ''}
+              placeholder="Project / company default"
+              options={SUPPORTED_CURRENCIES.map((code) => ({
+                value: code,
+                label: CURRENCY_LABELS[code as SupportedCurrency],
+              }))}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  currency: e.target.value || undefined,
+                }))
+              }
+            />
             <Input
-              label={netAmountFieldLabel(currency)}
+              label={netAmountFieldLabel(form.currency ?? currency)}
               name="netAmount"
               required
               value={form.netAmount}
@@ -355,7 +381,11 @@ export function ExpensesPage({
             canWrite
               ? () => {
                   setShowForm(true);
-                  setForm({ ...emptyForm, projectId: projectFilter });
+                  setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
                 }
               : undefined
           }
@@ -436,7 +466,11 @@ export function ExpensesPage({
                     <ExpenseStatusBadge status={expense.status} />
                   </td>
                   <td className={dataTableTdClassName('right')}>
-                    <CurrencyValue value={expense.grossAmount} size="sm" />
+                    <CurrencyValue
+                      value={expense.grossAmount}
+                      currency={expense.currency}
+                      size="sm"
+                    />
                   </td>
                   <td className={dataTableTdClassName()}>
                     {formatDateDe(expense.dueDate)}
@@ -499,7 +533,11 @@ export function ExpensesPage({
               <Button
                 size="sm"
                 onClick={() => {
-                  setForm({ ...emptyForm, projectId: projectFilter });
+                  setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
                   setShowForm(true);
                   setFormError(null);
                 }}
@@ -523,7 +561,11 @@ export function ExpensesPage({
           canWrite ? (
             <Button
               onClick={() => {
-                setForm({ ...emptyForm, projectId: projectFilter });
+                setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
                 setShowForm(true);
                 setFormError(null);
               }}

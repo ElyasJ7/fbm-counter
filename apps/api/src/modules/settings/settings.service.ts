@@ -1,6 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { APP_COMPANY_PLACEHOLDER, DEFAULT_CURRENCY } from '@fbm/shared';
+import {
+  APP_COMPANY_PLACEHOLDER,
+  assertSupportedCurrency,
+  assertSupportedTimezone,
+  DEFAULT_CURRENCY,
+  DEFAULT_DISPLAY_CURRENCY,
+  DEFAULT_TIMEZONE,
+} from '@fbm/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -21,6 +28,8 @@ export class SettingsService {
     iban: string | null;
     bic: string | null;
     defaultCurrency: string;
+    defaultDisplayCurrency: string;
+    timezone: string;
     defaultVatRate: Prisma.Decimal;
     invoicePrefix: string;
     createdAt: Date;
@@ -39,11 +48,36 @@ export class SettingsService {
       iban: settings.iban,
       bic: settings.bic,
       defaultCurrency: settings.defaultCurrency,
+      defaultDisplayCurrency: settings.defaultDisplayCurrency,
+      timezone: settings.timezone,
       defaultVatRate: settings.defaultVatRate.toString(),
       invoicePrefix: settings.invoicePrefix,
       createdAt: settings.createdAt.toISOString(),
       updatedAt: settings.updatedAt.toISOString(),
     };
+  }
+
+  private normalizeCurrency(
+    value: string | undefined,
+    field: string,
+  ): string | undefined {
+    if (value === undefined) return undefined;
+    try {
+      return assertSupportedCurrency(value);
+    } catch {
+      throw new BadRequestException(
+        `${field} must be one of AFN, EUR, USD`,
+      );
+    }
+  }
+
+  private normalizeTimezone(value: string | undefined): string | undefined {
+    if (value === undefined) return undefined;
+    try {
+      return assertSupportedTimezone(value);
+    } catch {
+      throw new BadRequestException('Unsupported timezone');
+    }
   }
 
   private async ensureSettings() {
@@ -55,6 +89,8 @@ export class SettingsService {
         companyName: APP_COMPANY_PLACEHOLDER,
         country: 'DE',
         defaultCurrency: DEFAULT_CURRENCY,
+        defaultDisplayCurrency: DEFAULT_DISPLAY_CURRENCY,
+        timezone: DEFAULT_TIMEZONE,
         defaultVatRate: 19,
         invoicePrefix: 'INV',
       },
@@ -68,6 +104,16 @@ export class SettingsService {
 
   async update(dto: UpdateSettingsDto, actorId: string) {
     const existing = await this.ensureSettings();
+
+    const defaultCurrency = this.normalizeCurrency(
+      dto.defaultCurrency,
+      'defaultCurrency',
+    );
+    const defaultDisplayCurrency = this.normalizeCurrency(
+      dto.defaultDisplayCurrency,
+      'defaultDisplayCurrency',
+    );
+    const timezone = this.normalizeTimezone(dto.timezone);
 
     return this.prisma.$transaction(async (tx) => {
       const settings = await tx.companySettings.update({
@@ -93,7 +139,9 @@ export class SettingsService {
               : dto.taxNumber.trim() || null,
           iban: dto.iban === undefined ? undefined : dto.iban.trim() || null,
           bic: dto.bic === undefined ? undefined : dto.bic.trim() || null,
-          defaultCurrency: dto.defaultCurrency?.trim().toUpperCase(),
+          defaultCurrency,
+          defaultDisplayCurrency,
+          timezone,
           defaultVatRate: dto.defaultVatRate,
           invoicePrefix: dto.invoicePrefix?.trim().toUpperCase(),
         },
@@ -110,12 +158,16 @@ export class SettingsService {
             defaultVatRate: existing.defaultVatRate.toString(),
             invoicePrefix: existing.invoicePrefix,
             defaultCurrency: existing.defaultCurrency,
+            defaultDisplayCurrency: existing.defaultDisplayCurrency,
+            timezone: existing.timezone,
           },
           newValue: {
             companyName: settings.companyName,
             defaultVatRate: settings.defaultVatRate.toString(),
             invoicePrefix: settings.invoicePrefix,
             defaultCurrency: settings.defaultCurrency,
+            defaultDisplayCurrency: settings.defaultDisplayCurrency,
+            timezone: settings.timezone,
           },
         },
       });

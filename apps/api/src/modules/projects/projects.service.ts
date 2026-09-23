@@ -226,6 +226,12 @@ export class ProjectsService {
 
     const currentBudget = dto.currentBudget ?? dto.initialBudget;
 
+    const companySettings = await this.prisma.companySettings.findFirst({
+      select: { defaultCurrency: true },
+    });
+    const fallbackCurrency =
+      companySettings?.defaultCurrency?.toUpperCase() ?? 'EUR';
+
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const row = await tx.project.create({
@@ -251,7 +257,7 @@ export class ProjectsService {
             contractValue: dto.contractValue,
             initialBudget: dto.initialBudget,
             currentBudget,
-            currency: dto.currency ?? 'EUR',
+            currency: dto.currency ?? fallbackCurrency,
             progressPercent: dto.progressPercent ?? 0,
             notes: dto.notes,
           },

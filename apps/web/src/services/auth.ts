@@ -19,3 +19,12 @@ export function fetchMe() {
 export function refreshSession() {
   return apiRequest<{ user: AuthUserDto }>('/auth/refresh', { method: 'POST' });
 }
+
+export function updatePreferences(input: {
+  preferredDisplayCurrency?: string | null;
+}) {
+  return apiRequest<AuthUserDto>('/auth/me/preferences', {
+    method: 'PATCH',
+    body: input,
+  });
+}

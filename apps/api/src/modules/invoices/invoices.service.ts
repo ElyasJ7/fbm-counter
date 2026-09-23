@@ -22,6 +22,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NumberingService } from '../common/numbering.service';
+import { resolveTransactionCurrency } from '../common/transaction-currency';
 import { buildPdfBuffer } from '../common/pdf.util';
 import type {
   CreateInvoiceDto,
@@ -228,6 +229,7 @@ export class InvoicesService {
       taxAmount: this.decimalToString(invoice.taxAmount),
       grossAmount: this.decimalToString(invoice.grossAmount),
       paidAmount: this.decimalToString(invoice.paidAmount),
+      currency: invoice.currency,
       status,
       paymentTerms: invoice.paymentTerms,
       notes: invoice.notes,
@@ -414,18 +416,19 @@ export class InvoicesService {
       doc.moveDown();
       doc.fillColor('#000').fontSize(11).text('Line items');
       doc.moveDown(0.3);
+      const cur = data.currency;
       for (const item of data.items) {
         doc
           .fontSize(10)
           .text(
-            `${item.description} · Qty ${item.quantity} · ${item.netAmount} EUR`,
+            `${item.description} · Qty ${item.quantity} · ${item.netAmount} ${cur}`,
           );
       }
       doc.moveDown();
-      doc.fontSize(11).text(`Net: ${data.netAmount} EUR`);
-      doc.text(`VAT (${data.taxRate}%): ${data.taxAmount} EUR`);
-      doc.fontSize(12).text(`Gross: ${data.grossAmount} EUR`);
-      doc.text(`Paid: ${data.paidAmount} EUR`);
+      doc.fontSize(11).text(`Net: ${data.netAmount} ${cur}`);
+      doc.text(`VAT (${data.taxRate}%): ${data.taxAmount} ${cur}`);
+      doc.fontSize(12).text(`Gross: ${data.grossAmount} ${cur}`);
+      doc.text(`Paid: ${data.paidAmount} ${cur}`);
       if (data.notes) {
         doc.moveDown();
         doc.fontSize(10).fillColor('#555').text(`Note: ${data.notes}`);
@@ -467,6 +470,10 @@ export class InvoicesService {
       const settings = await tx.companySettings.findFirst({
         select: { defaultVatRate: true },
       });
+      const currency = await resolveTransactionCurrency(tx, {
+        explicit: dto.currency,
+        projectId: dto.projectId,
+      });
       const taxRate =
         dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
       const amounts = this.computeTax(
@@ -501,6 +508,7 @@ export class InvoicesService {
               taxAmount: amounts.taxAmount,
               grossAmount: amounts.grossAmount,
               paidAmount: '0',
+              currency,
               status: dto.status ?? InvoiceStatus.DRAFT,
               paymentTerms: dto.paymentTerms,
               notes: dto.notes,
@@ -620,6 +628,28 @@ export class InvoicesService {
     });
     const paidAmount = (paymentAggregate._sum.amount ?? money(0)).toString();
 
+    let nextCurrency = existing.currency;
+    if (dto.currency !== undefined) {
+      if (!money(paidAmount).isZero()) {
+        throw new BadRequestException(
+          'Cannot change invoice currency after payments have been recorded',
+        );
+      }
+      nextCurrency = await resolveTransactionCurrency(this.prisma, {
+        explicit: dto.currency,
+        projectId:
+          dto.projectId !== undefined ? dto.projectId : existing.projectId,
+      });
+    } else if (
+      dto.projectId !== undefined &&
+      dto.projectId !== existing.projectId &&
+      money(paidAmount).isZero()
+    ) {
+      nextCurrency = await resolveTransactionCurrency(this.prisma, {
+        projectId: dto.projectId,
+      });
+    }
+
     const netAmount = dto.netAmount ?? existing.netAmount.toString();
     const taxRate = dto.taxRate ?? existing.taxRate.toString();
     const items = this.mapItems(dto.items);
@@ -689,6 +719,7 @@ export class InvoicesService {
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
           paidAmount,
+          currency: nextCurrency,
           status,
           paymentTerms: dto.paymentTerms,
           notes: dto.notes,

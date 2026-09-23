@@ -6,9 +6,12 @@ import {
   INVOICE_STATUS_LABELS,
   INVOICE_TYPES,
   INVOICE_TYPE_LABELS,
+  CURRENCY_LABELS,
+  SUPPORTED_CURRENCIES,
   roleHasPermission,
   type InvoiceStatus,
   type InvoiceType,
+  type SupportedCurrency,
 } from '@fbm/shared';
 import {
   InvoiceStatusBadge,
@@ -88,6 +91,7 @@ const emptyForm: InvoiceInput = {
   customerId: '',
   supplierId: '',
   notes: '',
+  currency: undefined,
 };
 
 type InvoicesPageProps = {
@@ -122,6 +126,7 @@ export function InvoicesPage({
   const [form, setForm] = useState<InvoiceInput>({
     ...emptyForm,
     projectId: projectFilter,
+    currency: currency || undefined,
   });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -163,6 +168,7 @@ export function InvoicesPage({
         issueDate: form.issueDate,
         dueDate: form.dueDate,
         netAmount: form.netAmount.trim(),
+        currency: form.currency || currency || undefined,
         taxRate: form.taxRate?.trim() || '19',
         status: form.status || 'DRAFT',
         projectId: form.projectId || projectFilter || undefined,
@@ -189,7 +195,11 @@ export function InvoicesPage({
     },
     onSuccess: async () => {
       setShowForm(false);
-      setForm({ ...emptyForm, projectId: projectFilter });
+      setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
       setFormError(null);
       await queryClient.invalidateQueries({ queryKey: ['invoices'] });
       if (projectFilter) {
@@ -302,8 +312,24 @@ export function InvoicesPage({
                 }))
               }
             />
+            <Select
+              label="Currency"
+              name="currency"
+              value={form.currency ?? currency ?? ''}
+              placeholder="Project / company default"
+              options={SUPPORTED_CURRENCIES.map((code) => ({
+                value: code,
+                label: CURRENCY_LABELS[code as SupportedCurrency],
+              }))}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  currency: e.target.value || undefined,
+                }))
+              }
+            />
             <Input
-              label={netAmountFieldLabel(currency)}
+              label={netAmountFieldLabel(form.currency ?? currency)}
               name="netAmount"
               required
               value={form.netAmount}
@@ -441,7 +467,11 @@ export function InvoicesPage({
             canWrite
               ? () => {
                   setShowForm(true);
-                  setForm({ ...emptyForm, projectId: projectFilter });
+                  setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
                 }
               : undefined
           }
@@ -526,10 +556,18 @@ export function InvoicesPage({
                       <InvoiceStatusBadge status={invoice.status} />
                     </td>
                     <td className={dataTableTdClassName('right')}>
-                      <CurrencyValue value={invoice.grossAmount} size="sm" />
+                      <CurrencyValue
+                        value={invoice.grossAmount}
+                        currency={invoice.currency}
+                        size="sm"
+                      />
                     </td>
                     <td className={dataTableTdClassName('right')}>
-                      <CurrencyValue value={invoice.paidAmount} size="sm" />
+                      <CurrencyValue
+                        value={invoice.paidAmount}
+                        currency={invoice.currency}
+                        size="sm"
+                      />
                     </td>
                     <td className={dataTableTdClassName()}>
                       {formatDateDe(invoice.dueDate)}
@@ -606,7 +644,11 @@ export function InvoicesPage({
               <Button
                 size="sm"
                 onClick={() => {
-                  setForm({ ...emptyForm, projectId: projectFilter });
+                  setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
                   setShowForm(true);
                   setFormError(null);
                 }}
@@ -630,7 +672,11 @@ export function InvoicesPage({
           canWrite ? (
             <Button
               onClick={() => {
-                setForm({ ...emptyForm, projectId: projectFilter });
+                setForm({
+                    ...emptyForm,
+                    projectId: projectFilter,
+                    currency: currency || undefined,
+                  });
                 setShowForm(true);
                 setFormError(null);
               }}

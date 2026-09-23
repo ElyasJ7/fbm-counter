@@ -59,7 +59,7 @@ export function LoginPage() {
         'status' in err &&
         typeof (err as { message?: unknown }).message === 'string'
       ) {
-        setError((err as { message: string }).message);
+        setError((err as unknown as { message: string }).message);
       } else if (err instanceof Error && err.message) {
         setError(err.message);
       } else {

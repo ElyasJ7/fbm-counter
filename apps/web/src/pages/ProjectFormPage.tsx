@@ -2,12 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  CURRENCY_LABELS,
   PROJECT_STATUSES,
   PROJECT_STATUS_LABELS,
   ROLE_LABELS,
+  SUPPORTED_CURRENCIES,
   roleHasPermission,
   type ProjectStatus,
   type Role,
+  type SupportedCurrency,
 } from '@fbm/shared';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
@@ -128,6 +131,7 @@ export function ProjectFormPage() {
         actualCompletionDate: form.actualCompletionDate || undefined,
         notes: form.notes?.trim() || undefined,
         currentBudget: form.currentBudget || form.initialBudget,
+        currency: form.currency || undefined,
       };
       if (isEdit && id) {
         return updateProject(id, payload);
@@ -395,10 +399,22 @@ export function ProjectFormPage() {
 
           <FormSection
             title="Financial information"
-            description="Amounts are stored as decimal strings in EUR."
+            description="Amounts are stored in the project currency."
           >
+            <Select
+              label="Project currency"
+              name="currency"
+              value={form.currency ?? 'EUR'}
+              options={SUPPORTED_CURRENCIES.map((code) => ({
+                value: code,
+                label: CURRENCY_LABELS[code as SupportedCurrency],
+              }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, currency: e.target.value }))
+              }
+            />
             <Input
-              label="Contract value (EUR)"
+              label={`Contract value (${form.currency ?? 'EUR'})`}
               name="contractValue"
               required
               inputMode="decimal"
@@ -408,7 +424,7 @@ export function ProjectFormPage() {
               }
             />
             <Input
-              label="Initial budget (EUR)"
+              label={`Initial budget (${form.currency ?? 'EUR'})`}
               name="initialBudget"
               required
               inputMode="decimal"
@@ -418,7 +434,7 @@ export function ProjectFormPage() {
               }
             />
             <Input
-              label="Current budget (EUR)"
+              label={`Current budget (${form.currency ?? 'EUR'})`}
               name="currentBudget"
               inputMode="decimal"
               value={form.currentBudget ?? ''}

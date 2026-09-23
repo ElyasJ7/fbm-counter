@@ -24,6 +24,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NumberingService } from '../common/numbering.service';
+import { parseSupportedCurrencyOrThrow } from '../common/transaction-currency';
 import type { CreatePaymentDto } from './dto/create-payment.dto';
 import { lockInvoiceForUpdate, sumValidPaymentAmount } from './payment-locking';
 
@@ -34,6 +35,7 @@ const paymentInclude = {
       invoiceNumber: true,
       type: true,
       status: true,
+      currency: true,
     },
   },
   project: { select: { id: true, projectNumber: true, name: true } },
@@ -92,6 +94,7 @@ export class PaymentsService {
       projectId: payment.projectId,
       paymentDate: toDateOnlyString(payment.paymentDate),
       amount: this.decimalToString(payment.amount),
+      currency: payment.currency,
       type: payment.type,
       method: payment.method,
       reference: payment.reference,
@@ -181,6 +184,16 @@ export class PaymentsService {
         );
       }
 
+      const invoiceCurrency = parseSupportedCurrencyOrThrow(invoice.currency);
+      if (dto.currency) {
+        const requested = parseSupportedCurrencyOrThrow(dto.currency);
+        if (requested !== invoiceCurrency) {
+          throw new BadRequestException(
+            `Payment currency ${requested} must match invoice currency ${invoiceCurrency}. Cross-currency payments are not supported yet.`,
+          );
+        }
+      }
+
       if (dto.projectId) {
         const project = await tx.project.findFirst({
           where: { id: dto.projectId, deletedAt: null },
@@ -222,6 +235,7 @@ export class PaymentsService {
           projectId,
           paymentDate: dateOnlyToUtcDate(dto.paymentDate),
           amount: dto.amount,
+          currency: invoiceCurrency,
           type: paymentType,
           method: dto.method ?? PaymentMethod.BANK_TRANSFER,
           reference: dto.reference,

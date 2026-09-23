@@ -396,3 +396,12 @@ export {
   csvEscapeCell,
   toCsvDocument,
 } from './csv';
+
+export {
+  crossRateFromPivot,
+  convertWithRate,
+  invertRate,
+  convertMoney,
+  asDisplayMoneyString,
+  type ConversionResult,
+} from './fx';

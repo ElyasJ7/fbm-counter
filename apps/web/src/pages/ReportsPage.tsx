@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BUDGET_CATEGORY_LABELS,
@@ -22,6 +22,7 @@ import {
   YAxis,
 } from 'recharts';
 import { ProjectStatusBadge } from '../components/projects/ProjectStatusBadge';
+import { FxRateIndicator } from '../components/currency/FxRateIndicator';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -41,6 +42,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { StatCard } from '../components/ui/StatCard';
 import { useAuth } from '../hooks/useAuth';
+import { useDisplayCurrency } from '../hooks/useDisplayCurrency';
 import { ApiError, apiDownload } from '../lib/api';
 import { formatCurrency } from '../lib/format';
 import { fetchReports, reportsExportPath } from '../services/reports';
@@ -89,12 +91,14 @@ async function downloadReport(
   from: string,
   to: string,
   format: 'csv' | 'pdf' = 'csv',
+  currency?: string,
 ) {
   const response = await apiDownload(
     reportsExportPath(type, {
       from: from || undefined,
       to: to || undefined,
       format,
+      currency: currency || undefined,
     }),
   );
   if (!response.ok) {
@@ -120,6 +124,7 @@ async function downloadReport(
 
 export function ReportsPage() {
   const { user } = useAuth();
+  const { syncFromServer } = useDisplayCurrency();
   const canExport = user
     ? roleHasPermission(user.role, 'reports:export')
     : false;
@@ -132,13 +137,25 @@ export function ReportsPage() {
   const [exporting, setExporting] = useState<string | null>(null);
 
   const query = useQuery({
-    queryKey: ['reports', appliedFrom, appliedTo],
+    queryKey: [
+      'reports',
+      appliedFrom,
+      appliedTo,
+      user?.preferredDisplayCurrency ?? 'company-default',
+    ],
     queryFn: () =>
       fetchReports({
         from: appliedFrom || undefined,
         to: appliedTo || undefined,
+        currency: user?.preferredDisplayCurrency ?? undefined,
       }),
   });
+
+  useEffect(() => {
+    if (query.data?.displayCurrency) {
+      syncFromServer(query.data.displayCurrency);
+    }
+  }, [query.data?.displayCurrency, syncFromServer]);
 
   const cashFlowData = useMemo(
     () =>
@@ -173,7 +190,13 @@ export function ReportsPage() {
     setExportError(null);
     setExporting(`${format}-${type}`);
     try {
-      await downloadReport(type, appliedFrom, appliedTo, format);
+      await downloadReport(
+        type,
+        appliedFrom,
+        appliedTo,
+        format,
+        user?.preferredDisplayCurrency ?? undefined,
+      );
     } catch (error) {
       setExportError(
         error instanceof Error ? error.message : 'Export failed',
@@ -226,7 +249,7 @@ export function ReportsPage() {
   }
 
   const data = query.data!;
-  const { kpis, currency, period, projectProfitability } = data;
+  const { kpis, currency, period, projectProfitability, fx } = data;
 
   return (
     <div className="space-y-6">
@@ -269,6 +292,8 @@ export function ReportsPage() {
           ) : null
         }
       />
+
+      <FxRateIndicator fx={fx} />
 
       {exportError ? (
         <Alert tone="danger" title="Export failed">

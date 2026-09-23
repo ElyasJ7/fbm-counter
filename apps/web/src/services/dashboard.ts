@@ -1,3 +1,4 @@
+import type { MoneyConversionStatus } from '@fbm/shared';
 import { apiRequest } from '../lib/api';
 
 export type DashboardProjectProfitability = {
@@ -14,8 +15,22 @@ export type DashboardProjectProfitability = {
   currentBudget: string;
 };
 
+export type DashboardFxMeta = {
+  status: MoneyConversionStatus;
+  baseCurrency: string;
+  displayCurrency: string;
+  exchangeRate: string | null;
+  effectiveAt: string | null;
+  fetchedAt: string | null;
+  provider: string | null;
+};
+
 export type DashboardResponse = {
+  /** Amounts are labeled in this currency (books currency if FX unavailable). */
   currency: string;
+  baseCurrency: string;
+  displayCurrency: string;
+  fx: DashboardFxMeta;
   generatedAt: string;
   kpis: {
     totalRevenue: string;
@@ -71,6 +86,11 @@ export type DashboardResponse = {
   };
 };
 
-export function fetchDashboard() {
-  return apiRequest<DashboardResponse>('/dashboard');
+export function fetchDashboard(currency?: string) {
+  const params = new URLSearchParams();
+  if (currency) params.set('currency', currency);
+  const qs = params.toString();
+  return apiRequest<DashboardResponse>(
+    `/dashboard${qs ? `?${qs}` : ''}`,
+  );
 }

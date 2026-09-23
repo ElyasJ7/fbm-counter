@@ -11,6 +11,7 @@ import type { BudgetCategory } from '@prisma/client';
 import type { AuthUserDto } from '@fbm/shared';
 import { ProjectAccessService } from '../authz/project-access.service';
 import { buildPdfBuffer } from '../common/pdf.util';
+import { DisplayFxService } from '../exchange-rates/display-fx.service';
 import { FinanceQueryService } from '../finance/finance-query.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -24,6 +25,7 @@ const OPEN_INVOICE_STATUSES = [
 export type ReportQuery = {
   from?: string;
   to?: string;
+  currency?: string;
 };
 
 @Injectable()
@@ -32,6 +34,7 @@ export class ReportsService {
     private readonly prisma: PrismaService,
     private readonly financeQuery: FinanceQueryService,
     private readonly projectAccess: ProjectAccessService,
+    private readonly displayFx: DisplayFxService,
   ) {}
 
   private moneyStr(value: ReturnType<typeof money>) {
@@ -102,6 +105,148 @@ export class ReportsService {
     return toCsvDocument(rows);
   }
 
+  private async applyDisplayFx<
+    T extends {
+      kpis: {
+        totalRevenue: string;
+        totalExpenses: string;
+        grossProfit: string;
+        netProfit: string;
+        availableCash: string;
+        outstandingCustomerInvoices: string;
+        outstandingSupplierInvoices: string;
+        activeProjects: number;
+        totalProjectValue: string;
+        totalBudget: string;
+        budgetUtilizationPercent: string | null;
+      };
+      monthlyCashFlow: Array<{
+        month: string;
+        inflow: string;
+        outflow: string;
+        net: string;
+      }>;
+      projectProfitability: Array<{
+        projectId: string;
+        projectNumber: string;
+        name: string;
+        status: string;
+        revenue: string;
+        costs: string;
+        profit: string;
+        profitMarginPercent: string | null;
+        contractValue: string;
+        currentBudget: string;
+      }>;
+      expensesByCategory: Array<{ category: BudgetCategory; amount: string }>;
+      generatedAt: string;
+      period: { from: string | null; to: string | null };
+    },
+  >(raw: T, user: AuthUserDto, queryCurrency?: string) {
+    const { baseCurrency, displayCurrency } =
+      await this.displayFx.resolveCurrencies(user, queryCurrency);
+
+    const moneySlots: string[] = [
+      raw.kpis.totalRevenue,
+      raw.kpis.totalExpenses,
+      raw.kpis.grossProfit,
+      raw.kpis.netProfit,
+      raw.kpis.availableCash,
+      raw.kpis.outstandingCustomerInvoices,
+      raw.kpis.outstandingSupplierInvoices,
+      raw.kpis.totalProjectValue,
+      raw.kpis.totalBudget,
+    ];
+    for (const row of raw.monthlyCashFlow) {
+      moneySlots.push(row.inflow, row.outflow, row.net);
+    }
+    for (const row of raw.projectProfitability) {
+      moneySlots.push(
+        row.revenue,
+        row.costs,
+        row.profit,
+        row.contractValue,
+        row.currentBudget,
+      );
+    }
+    for (const row of raw.expensesByCategory) {
+      moneySlots.push(row.amount);
+    }
+
+    const { amounts: converted, fx } = await this.displayFx.convertMoneyFields(
+      moneySlots,
+      baseCurrency,
+      displayCurrency,
+    );
+    const labeledCurrency = this.displayFx.labeledCurrency(fx);
+
+    let i = 0;
+    const take = () => converted[i++]!;
+
+    return {
+      currency: labeledCurrency,
+      baseCurrency,
+      displayCurrency,
+      fx,
+      generatedAt: raw.generatedAt,
+      period: raw.period,
+      kpis: {
+        totalRevenue: take(),
+        totalExpenses: take(),
+        grossProfit: take(),
+        netProfit: take(),
+        availableCash: take(),
+        outstandingCustomerInvoices: take(),
+        outstandingSupplierInvoices: take(),
+        activeProjects: raw.kpis.activeProjects,
+        totalProjectValue: take(),
+        totalBudget: take(),
+        budgetUtilizationPercent: raw.kpis.budgetUtilizationPercent,
+      },
+      monthlyCashFlow: raw.monthlyCashFlow.map((row) => ({
+        month: row.month,
+        inflow: take(),
+        outflow: take(),
+        net: take(),
+      })),
+      projectProfitability: raw.projectProfitability.map((row) => ({
+        ...row,
+        revenue: take(),
+        costs: take(),
+        profit: take(),
+        contractValue: take(),
+        currentBudget: take(),
+      })),
+      expensesByCategory: raw.expensesByCategory.map((row) => ({
+        category: row.category,
+        amount: take(),
+      })),
+    };
+  }
+
+  private fxCsvMeta(summary: {
+    baseCurrency: string;
+    displayCurrency: string;
+    currency: string;
+    fx: {
+      status: string;
+      exchangeRate: string | null;
+      effectiveAt: string | null;
+      fetchedAt: string | null;
+    };
+  }) {
+    return [
+      ['Reporting Currency', summary.currency],
+      ['Books Currency', summary.baseCurrency],
+      ['Display Currency', summary.displayCurrency],
+      ['FX Status', summary.fx.status],
+      ['Exchange Rate', summary.fx.exchangeRate ?? ''],
+      ['Rate Effective At', summary.fx.effectiveAt ?? ''],
+      ['Rate Fetched At', summary.fx.fetchedAt ?? ''],
+      [],
+    ];
+  }
+
   async getSummary(query: ReportQuery = {}, user: AuthUserDto) {
     const { from, to } = this.resolvePeriod(query);
     const projectIds = await this.projectAccess.accessibleProjectIds(user);
@@ -153,33 +298,36 @@ export class ReportsService {
         money(b.profit).comparedTo(money(a.profit)),
       );
 
-      return {
-        currency: 'EUR',
-        generatedAt: new Date().toISOString(),
-        period: { from: null, to: null },
-        kpis: {
-          totalRevenue,
-          totalExpenses: costs.actualCosts,
-          grossProfit: money(totalRevenue)
-            .minus(totalExpensePaid)
-            .toDecimalPlaces(4)
-            .toFixed(4),
-          netProfit: money(totalRevenue)
-            .minus(totalExpensePaid)
-            .toDecimalPlaces(4)
-            .toFixed(4),
-          availableCash: cash.availableCash,
-          outstandingCustomerInvoices: outstandingCustomer,
-          outstandingSupplierInvoices: outstandingSupplier,
-          activeProjects: projectKpis.activeProjects,
-          totalProjectValue: projectKpis.totalProjectValue,
-          totalBudget: projectKpis.totalBudget,
-          budgetUtilizationPercent,
+      return this.applyDisplayFx(
+        {
+          generatedAt: new Date().toISOString(),
+          period: { from: null, to: null },
+          kpis: {
+            totalRevenue,
+            totalExpenses: costs.actualCosts,
+            grossProfit: money(totalRevenue)
+              .minus(totalExpensePaid)
+              .toDecimalPlaces(4)
+              .toFixed(4),
+            netProfit: money(totalRevenue)
+              .minus(totalExpensePaid)
+              .toDecimalPlaces(4)
+              .toFixed(4),
+            availableCash: cash.availableCash,
+            outstandingCustomerInvoices: outstandingCustomer,
+            outstandingSupplierInvoices: outstandingSupplier,
+            activeProjects: projectKpis.activeProjects,
+            totalProjectValue: projectKpis.totalProjectValue,
+            totalBudget: projectKpis.totalBudget,
+            budgetUtilizationPercent,
+          },
+          monthlyCashFlow,
+          projectProfitability: sorted,
+          expensesByCategory,
         },
-        monthlyCashFlow,
-        projectProfitability: sorted,
-        expensesByCategory,
-      };
+        user,
+        query.currency,
+      );
     }
 
     const [projects, customerInvoices, supplierInvoices, expenses, payments] =
@@ -428,30 +576,33 @@ export class ReportsService {
       .filter((row) => !money(row.amount).isZero())
       .sort((a, b) => money(b.amount).comparedTo(money(a.amount)));
 
-    return {
-      currency: 'EUR',
-      generatedAt: new Date().toISOString(),
-      period: {
-        from: from ? this.formatDateLocal(from) : null,
-        to: to ? this.formatDateLocal(to) : null,
+    return this.applyDisplayFx(
+      {
+        generatedAt: new Date().toISOString(),
+        period: {
+          from: from ? this.formatDateLocal(from) : null,
+          to: to ? this.formatDateLocal(to) : null,
+        },
+        kpis: {
+          totalRevenue: this.moneyStr(totalRevenue),
+          totalExpenses: this.moneyStr(totalExpensePaid),
+          grossProfit: this.moneyStr(grossProfit),
+          netProfit: this.moneyStr(netProfit),
+          availableCash: this.moneyStr(availableCash),
+          outstandingCustomerInvoices: this.moneyStr(outstandingCustomer),
+          outstandingSupplierInvoices: this.moneyStr(outstandingSupplier),
+          activeProjects,
+          totalProjectValue: this.moneyStr(totalProjectValue),
+          totalBudget: this.moneyStr(totalBudget),
+          budgetUtilizationPercent,
+        },
+        monthlyCashFlow,
+        projectProfitability,
+        expensesByCategory,
       },
-      kpis: {
-        totalRevenue: this.moneyStr(totalRevenue),
-        totalExpenses: this.moneyStr(totalExpensePaid),
-        grossProfit: this.moneyStr(grossProfit),
-        netProfit: this.moneyStr(netProfit),
-        availableCash: this.moneyStr(availableCash),
-        outstandingCustomerInvoices: this.moneyStr(outstandingCustomer),
-        outstandingSupplierInvoices: this.moneyStr(outstandingSupplier),
-        activeProjects,
-        totalProjectValue: this.moneyStr(totalProjectValue),
-        totalBudget: this.moneyStr(totalBudget),
-        budgetUtilizationPercent,
-      },
-      monthlyCashFlow,
-      projectProfitability,
-      expensesByCategory,
-    };
+      user,
+      query.currency,
+    );
   }
 
   async exportCsv(
@@ -461,16 +612,32 @@ export class ReportsService {
   ) {
     const summary = await this.getSummary(query, user);
     const currency = summary.currency;
+    const meta = this.fxCsvMeta(summary);
+    const moneyHeaders = [
+      'Currency',
+      'Books Currency',
+      'Reporting Currency',
+      'Exchange Rate',
+      'Rate Date',
+    ] as const;
+    const moneyMeta = [
+      currency,
+      summary.baseCurrency,
+      summary.displayCurrency,
+      summary.fx.exchangeRate ?? '',
+      summary.fx.fetchedAt ?? summary.fx.effectiveAt ?? '',
+    ];
 
     if (type === 'cashflow') {
       const rows = [
-        ['Month', 'Inflows', 'Outflows', 'Net', 'Currency'],
+        ...meta,
+        ['Month', 'Inflows', 'Outflows', 'Net', ...moneyHeaders],
         ...summary.monthlyCashFlow.map((row) => [
           row.month,
           row.inflow,
           row.outflow,
           row.net,
-          currency,
+          ...moneyMeta,
         ]),
       ];
       return {
@@ -481,6 +648,7 @@ export class ReportsService {
 
     if (type === 'profitability') {
       const rows = [
+        ...meta,
         [
           'Project Number',
           'Name',
@@ -491,7 +659,7 @@ export class ReportsService {
           'Margin_%',
           'Contract Value',
           'Budget',
-          'Currency',
+          ...moneyHeaders,
         ],
         ...summary.projectProfitability.map((row) => [
           row.projectNumber,
@@ -503,7 +671,7 @@ export class ReportsService {
           row.profitMarginPercent ?? '',
           row.contractValue,
           row.currentBudget,
-          currency,
+          ...moneyMeta,
         ]),
       ];
       return {
@@ -513,30 +681,43 @@ export class ReportsService {
     }
 
     const rows = [
-      ['Metric', 'Value', 'Currency'],
-      ['Cash Received', summary.kpis.totalRevenue, currency],
-      ['Total Expenses', summary.kpis.totalExpenses, currency],
-      ['Gross Profit', summary.kpis.grossProfit, currency],
-      ['Net Profit', summary.kpis.netProfit, currency],
-      ['Available Cash', summary.kpis.availableCash, currency],
+      ...meta,
+      ['Metric', 'Value', ...moneyHeaders],
+      ['Cash Received', summary.kpis.totalRevenue, ...moneyMeta],
+      ['Total Expenses', summary.kpis.totalExpenses, ...moneyMeta],
+      ['Gross Profit', summary.kpis.grossProfit, ...moneyMeta],
+      ['Net Profit', summary.kpis.netProfit, ...moneyMeta],
+      ['Available Cash', summary.kpis.availableCash, ...moneyMeta],
       [
         'Accounts Receivable',
         summary.kpis.outstandingCustomerInvoices,
-        currency,
+        ...moneyMeta,
       ],
-      ['Accounts Payable', summary.kpis.outstandingSupplierInvoices, currency],
-      ['Active Projects', String(summary.kpis.activeProjects), ''],
-      ['Total Contract Value', summary.kpis.totalProjectValue, currency],
-      ['Total Budget', summary.kpis.totalBudget, currency],
-      ['Budget Utilization_%', summary.kpis.budgetUtilizationPercent ?? '', ''],
+      [
+        'Accounts Payable',
+        summary.kpis.outstandingSupplierInvoices,
+        ...moneyMeta,
+      ],
+      ['Active Projects', String(summary.kpis.activeProjects), '', '', '', '', ''],
+      ['Total Contract Value', summary.kpis.totalProjectValue, ...moneyMeta],
+      ['Total Budget', summary.kpis.totalBudget, ...moneyMeta],
+      [
+        'Budget Utilization_%',
+        summary.kpis.budgetUtilizationPercent ?? '',
+        '',
+        '',
+        '',
+        '',
+        '',
+      ],
       [],
-      ['Month', 'Inflows', 'Outflows', 'Net', 'Currency'],
+      ['Month', 'Inflows', 'Outflows', 'Net', ...moneyHeaders],
       ...summary.monthlyCashFlow.map((row) => [
         row.month,
         row.inflow,
         row.outflow,
         row.net,
-        currency,
+        ...moneyMeta,
       ]),
       [],
       [
@@ -549,7 +730,7 @@ export class ReportsService {
         'Margin_%',
         'Contract Value',
         'Budget',
-        'Currency',
+        ...moneyHeaders,
       ],
       ...summary.projectProfitability.map((row) => [
         row.projectNumber,
@@ -561,7 +742,7 @@ export class ReportsService {
         row.profitMarginPercent ?? '',
         row.contractValue,
         row.currentBudget,
-        currency,
+        ...moneyMeta,
       ]),
     ];
 
@@ -586,6 +767,20 @@ export class ReportsService {
           `Period: ${summary.period.from ?? 'all'} – ${summary.period.to ?? 'all'}`,
         );
       doc.text(`Generated: ${summary.generatedAt}`);
+      doc.text(`Reporting currency: ${summary.currency}`);
+      doc.text(`Books currency: ${summary.baseCurrency}`);
+      if (summary.fx.status === 'converted' && summary.fx.exchangeRate) {
+        doc.text(
+          `FX: 1 ${summary.baseCurrency} = ${summary.fx.exchangeRate} ${summary.displayCurrency}` +
+            (summary.fx.fetchedAt
+              ? ` (as of ${summary.fx.fetchedAt})`
+              : ''),
+        );
+      } else if (summary.fx.status === 'unavailable') {
+        doc.text(
+          `FX unavailable — amounts shown in books currency (${summary.baseCurrency})`,
+        );
+      }
       doc.moveDown();
 
       if (type === 'summary' || type === 'cashflow') {
@@ -608,7 +803,7 @@ export class ReportsService {
         doc.fontSize(10);
         for (const row of summary.monthlyCashFlow) {
           doc.text(
-            `${row.month}: +${row.inflow} / -${row.outflow} = ${row.net}`,
+            `${row.month}: +${row.inflow} / -${row.outflow} = ${row.net} ${summary.currency}`,
           );
         }
       }

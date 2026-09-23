@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  CURRENCY_LABELS,
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
+  SUPPORTED_CURRENCIES,
   roleHasPermission,
   type PaymentMethod,
+  type SupportedCurrency,
 } from '@fbm/shared';
 import {
   PaymentMethodBadge,
@@ -45,6 +48,7 @@ function todayInput() {
 const emptyForm: PaymentInput = {
   invoiceId: '',
   amount: '',
+  currency: undefined,
   paymentDate: todayInput(),
   method: 'BANK_TRANSFER',
   reference: '',
@@ -102,11 +106,31 @@ export function PaymentsPage({
     enabled: showForm,
   });
 
+  const selectedInvoice = useMemo(
+    () =>
+      (invoicesQuery.data?.data ?? []).find((inv) => inv.id === form.invoiceId),
+    [form.invoiceId, invoicesQuery.data?.data],
+  );
+
+  const paymentCurrency =
+    form.currency || selectedInvoice?.currency || currency || undefined;
+
+  useEffect(() => {
+    if (!form.invoiceId || form.currency) return;
+    if (!selectedInvoice?.currency) return;
+    setForm((prev) =>
+      prev.invoiceId === selectedInvoice.id && !prev.currency
+        ? { ...prev, currency: selectedInvoice.currency }
+        : prev,
+    );
+  }, [form.currency, form.invoiceId, selectedInvoice]);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload: PaymentInput = {
         invoiceId: form.invoiceId,
         amount: form.amount.trim(),
+        currency: paymentCurrency || undefined,
         paymentDate: form.paymentDate,
         method: form.method || 'BANK_TRANSFER',
         reference: form.reference?.trim() || undefined,
@@ -168,14 +192,40 @@ export function PaymentsPage({
               placeholder="Select Invoice"
               options={(invoicesQuery.data?.data ?? []).map((inv) => ({
                 value: inv.id,
-                label: `${inv.invoiceNumber} · ${formatCurrency(inv.grossAmount, currency)} (${formatCurrency(inv.paidAmount, currency)} paid)`,
+                label: `${inv.invoiceNumber} · ${formatCurrency(inv.grossAmount, inv.currency ?? currency)} (${formatCurrency(inv.paidAmount, inv.currency ?? currency)} paid)`,
+              }))}
+              onChange={(e) => {
+                const invoiceId = e.target.value;
+                const invoice = (invoicesQuery.data?.data ?? []).find(
+                  (inv) => inv.id === invoiceId,
+                );
+                setForm((prev) => ({
+                  ...prev,
+                  invoiceId,
+                  currency: invoice?.currency || prev.currency || currency,
+                }));
+              }}
+            />
+            <Select
+              label="Currency"
+              name="currency"
+              required
+              value={paymentCurrency ?? ''}
+              placeholder="Select currency"
+              hint="Must match the invoice currency."
+              options={SUPPORTED_CURRENCIES.map((code) => ({
+                value: code,
+                label: `${code} — ${CURRENCY_LABELS[code as SupportedCurrency]}`,
               }))}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, invoiceId: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  currency: e.target.value || undefined,
+                }))
               }
             />
             <Input
-              label={amountFieldLabel(currency)}
+              label={amountFieldLabel(paymentCurrency)}
               name="amount"
               required
               value={form.amount}
@@ -354,7 +404,11 @@ export function PaymentsPage({
                     <PaymentMethodBadge method={payment.method} />
                   </td>
                   <td className={dataTableTdClassName('right')}>
-                    <CurrencyValue value={payment.amount} size="sm" />
+                    <CurrencyValue
+                      value={payment.amount}
+                      currency={payment.currency}
+                      size="sm"
+                    />
                   </td>
                   <td className={dataTableTdClassName()}>
                     {formatDateDe(payment.paymentDate)}

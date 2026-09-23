@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { AuthUserDto } from '@fbm/shared';
 import { money } from '@fbm/financial-core';
 import { ProjectAccessService } from '../authz/project-access.service';
+import { DisplayFxService } from '../exchange-rates/display-fx.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinanceQueryService } from '../finance/finance-query.service';
 
@@ -11,6 +12,7 @@ export class DashboardService {
     private readonly prisma: PrismaService,
     private readonly financeQuery: FinanceQueryService,
     private readonly projectAccess: ProjectAccessService,
+    private readonly displayFx: DisplayFxService,
   ) {}
 
   private moneyStr(value: ReturnType<typeof money> | string) {
@@ -33,7 +35,10 @@ export class DashboardService {
     return keys;
   }
 
-  async getDashboard(user: AuthUserDto) {
+  async getDashboard(user: AuthUserDto, queryCurrency?: string) {
+    const { baseCurrency, displayCurrency } =
+      await this.displayFx.resolveCurrencies(user, queryCurrency);
+
     const months = this.lastNMonths(12);
     const projectIds = await this.projectAccess.accessibleProjectIds(user);
 
@@ -142,22 +147,130 @@ export class DashboardService {
       actualBudget = totalExpensePaid;
     }
 
+    const profitabilityRows = sortedProfitability.slice(0, 10).map((row) => ({
+      projectId: row.projectId,
+      projectNumber: row.projectNumber,
+      name: row.name,
+      status: row.status,
+      revenue: row.revenue,
+      costs: row.costs,
+      committedCosts: row.committedCosts,
+      profit: row.profit,
+      profitMarginPercent: row.profitMarginPercent,
+      contractValue: row.contractValue,
+      currentBudget: row.currentBudget,
+    }));
+
+    // Flatten all money fields for a single conversion pass (books → display).
+    const moneySlots: string[] = [
+      this.moneyStr(totalRevenue),
+      this.moneyStr(totalExpensePaid),
+      this.moneyStr(grossProfit),
+      this.moneyStr(netProfit),
+      cash.availableCash,
+      outstandingCustomer,
+      outstandingSupplier,
+      projectKpis.totalProjectValue,
+      projectKpis.totalBudget,
+      this.moneyStr(plannedBudget),
+      this.moneyStr(actualBudget),
+      this.moneyStr(plannedBudget.minus(actualBudget)),
+    ];
+
+    for (const row of revenueVsExpenses) {
+      moneySlots.push(row.revenue, row.expenses);
+    }
+    for (const row of monthlyCashFlow) {
+      moneySlots.push(row.inflow, row.outflow, row.net);
+    }
+    for (const row of profitDevelopment) {
+      moneySlots.push(row.cumulativeProfit);
+    }
+    for (const row of profitabilityRows) {
+      moneySlots.push(
+        row.revenue,
+        row.costs,
+        row.committedCosts,
+        row.profit,
+        row.contractValue,
+        row.currentBudget,
+      );
+    }
+    for (const row of expensesByCategory) {
+      moneySlots.push(row.amount);
+    }
+
+    const { amounts: converted, fx } = await this.displayFx.convertMoneyFields(
+      moneySlots,
+      baseCurrency,
+      displayCurrency,
+    );
+
+    const labeledCurrency = this.displayFx.labeledCurrency(fx);
+
+    let i = 0;
+    const take = () => converted[i++]!;
+
+    const kpis = {
+      totalRevenue: take(),
+      totalExpenses: take(),
+      grossProfit: take(),
+      netProfit: take(),
+      availableCash: take(),
+      outstandingCustomerInvoices: take(),
+      outstandingSupplierInvoices: take(),
+      activeProjects: projectKpis.activeProjects,
+      totalProjectValue: take(),
+      budgetUtilizationPercent,
+      totalBudget: take(),
+    };
+
+    const budgetVsActual = {
+      planned: take(),
+      actual: take(),
+      variance: take(),
+    };
+
+    const convertedRevenueVsExpenses = revenueVsExpenses.map((row) => ({
+      month: row.month,
+      revenue: take(),
+      expenses: take(),
+    }));
+
+    const convertedMonthlyCashFlow = monthlyCashFlow.map((row) => ({
+      month: row.month,
+      inflow: take(),
+      outflow: take(),
+      net: take(),
+    }));
+
+    const convertedProfitDevelopment = profitDevelopment.map((row) => ({
+      month: row.month,
+      cumulativeProfit: take(),
+    }));
+
+    const convertedProfitability = profitabilityRows.map((row) => ({
+      ...row,
+      revenue: take(),
+      costs: take(),
+      committedCosts: take(),
+      profit: take(),
+      contractValue: take(),
+      currentBudget: take(),
+    }));
+
+    const convertedExpensesByCategory = expensesByCategory.map((row) => ({
+      category: row.category,
+      amount: take(),
+    }));
+
     return {
-      currency: 'EUR',
+      currency: labeledCurrency,
+      baseCurrency,
+      displayCurrency,
+      fx,
       generatedAt: new Date().toISOString(),
-      kpis: {
-        totalRevenue: this.moneyStr(totalRevenue),
-        totalExpenses: this.moneyStr(totalExpensePaid),
-        grossProfit: this.moneyStr(grossProfit),
-        netProfit: this.moneyStr(netProfit),
-        availableCash: cash.availableCash,
-        outstandingCustomerInvoices: outstandingCustomer,
-        outstandingSupplierInvoices: outstandingSupplier,
-        activeProjects: projectKpis.activeProjects,
-        totalProjectValue: projectKpis.totalProjectValue,
-        budgetUtilizationPercent,
-        totalBudget: projectKpis.totalBudget,
-      },
+      kpis,
       comparisons: {
         previousPeriodAvailable: false,
         note:
@@ -166,28 +279,12 @@ export class DashboardService {
             : 'No payment history available for trend comparison.',
       },
       charts: {
-        revenueVsExpenses,
-        monthlyCashFlow,
-        profitDevelopment,
-        projectProfitability: sortedProfitability.slice(0, 10).map((row) => ({
-          projectId: row.projectId,
-          projectNumber: row.projectNumber,
-          name: row.name,
-          status: row.status,
-          revenue: row.revenue,
-          costs: row.costs,
-          committedCosts: row.committedCosts,
-          profit: row.profit,
-          profitMarginPercent: row.profitMarginPercent,
-          contractValue: row.contractValue,
-          currentBudget: row.currentBudget,
-        })),
-        expensesByCategory,
-        budgetVsActual: {
-          planned: this.moneyStr(plannedBudget),
-          actual: this.moneyStr(actualBudget),
-          variance: this.moneyStr(plannedBudget.minus(actualBudget)),
-        },
+        revenueVsExpenses: convertedRevenueVsExpenses,
+        monthlyCashFlow: convertedMonthlyCashFlow,
+        profitDevelopment: convertedProfitDevelopment,
+        projectProfitability: convertedProfitability,
+        expensesByCategory: convertedExpensesByCategory,
+        budgetVsActual,
         invoiceStatusDistribution,
         projectStatusDistribution: projectStatusDistribution.map((row) => ({
           status: row.status,

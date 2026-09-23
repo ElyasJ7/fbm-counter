@@ -8,6 +8,7 @@ export type LockedInvoiceRow = {
   paidAmount: Prisma.Decimal;
   dueDate: Date;
   projectId: string | null;
+  currency: string;
 };
 
 /**
@@ -26,7 +27,8 @@ export async function lockInvoiceForUpdate(
       "grossAmount",
       "paidAmount",
       "dueDate",
-      "projectId"
+      "projectId",
+      currency
     FROM invoices
     WHERE id = ${invoiceId}
       AND "deletedAt" IS NULL

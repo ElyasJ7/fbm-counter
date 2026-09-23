@@ -22,6 +22,7 @@ export class UsersService {
     lastName: string;
     role: Role;
     status: UserStatus;
+    preferredDisplayCurrency?: string | null;
     lastLoginAt: Date | null;
     createdAt: Date;
   }) {
@@ -32,6 +33,7 @@ export class UsersService {
       lastName: user.lastName,
       role: user.role,
       status: user.status,
+      preferredDisplayCurrency: user.preferredDisplayCurrency ?? null,
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
       createdAt: user.createdAt.toISOString(),
     };
@@ -47,6 +49,7 @@ export class UsersService {
         lastName: true,
         role: true,
         status: true,
+        preferredDisplayCurrency: true,
         lastLoginAt: true,
         createdAt: true,
       },

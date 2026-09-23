@@ -10,6 +10,7 @@ import {
   calculateTaxAmount,
   applyPaymentToExpense,
   assertValidExpensePaidAmount,
+  money,
   resolveExpenseStatus,
 } from '@fbm/financial-core';
 import type { AuthUserDto } from '@fbm/shared';
@@ -17,6 +18,7 @@ import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { resolveTransactionCurrency } from '../common/transaction-currency';
 import type { CreateExpenseDto } from './dto/create-expense.dto';
 import type { UpdateExpenseDto } from './dto/update-expense.dto';
 import type { RecordExpensePaymentDto } from './dto/record-expense-payment.dto';
@@ -87,6 +89,7 @@ export class ExpensesService {
       taxAmount: this.decimalToString(expense.taxAmount),
       grossAmount: this.decimalToString(expense.grossAmount),
       paidAmount: this.decimalToString(expense.paidAmount),
+      currency: expense.currency,
       status,
       paymentDate: expense.paymentDate?.toISOString() ?? null,
       paymentMethod: expense.paymentMethod,
@@ -221,6 +224,10 @@ export class ExpensesService {
       const settings = await tx.companySettings.findFirst({
         select: { defaultVatRate: true },
       });
+      const currency = await resolveTransactionCurrency(tx, {
+        explicit: dto.currency,
+        projectId: dto.projectId,
+      });
       const taxRate =
         dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
       const amounts = this.computeTax(dto.netAmount, taxRate);
@@ -242,6 +249,7 @@ export class ExpensesService {
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
           paidAmount: '0',
+          currency,
           status: dto.status ?? ExpenseStatus.DRAFT,
           paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
           paymentMethod: dto.paymentMethod,
@@ -322,6 +330,29 @@ export class ExpensesService {
         error instanceof Error ? error.message : 'Invalid paid amount',
       );
     }
+
+    let nextCurrency = existing.currency;
+    if (dto.currency !== undefined) {
+      if (!money(paidAmount).isZero()) {
+        throw new BadRequestException(
+          'Cannot change expense currency after payments have been recorded',
+        );
+      }
+      nextCurrency = await resolveTransactionCurrency(this.prisma, {
+        explicit: dto.currency,
+        projectId:
+          dto.projectId !== undefined ? dto.projectId : existing.projectId,
+      });
+    } else if (
+      dto.projectId !== undefined &&
+      dto.projectId !== existing.projectId &&
+      money(paidAmount).isZero()
+    ) {
+      nextCurrency = await resolveTransactionCurrency(this.prisma, {
+        projectId: dto.projectId,
+      });
+    }
+
     const dueDate =
       dto.dueDate === undefined
         ? existing.dueDate
@@ -362,6 +393,7 @@ export class ExpensesService {
           taxRate: dto.taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
+          currency: nextCurrency,
           // paidAmount is intentionally omitted — use recordPayment()
           status,
           paymentDate:

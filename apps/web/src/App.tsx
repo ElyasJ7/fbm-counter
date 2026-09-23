@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './layouts/AppLayout';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { CurrencyConverterPage } from './pages/CurrencyConverterPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { DocumentsPage } from './pages/DocumentsPage';
@@ -39,6 +40,10 @@ export default function App() {
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="expenses" element={<ExpensesPage />} />
+            <Route
+              path="currency-converter"
+              element={<CurrencyConverterPage />}
+            />
             <Route path="suppliers" element={<SuppliersPage />} />
             <Route path="suppliers/:id" element={<SupplierDetailPage />} />
             <Route path="subcontractors" element={<SubcontractorsPage />} />

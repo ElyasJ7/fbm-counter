@@ -12,7 +12,11 @@ export type SettingsInput = {
   taxNumber?: string;
   iban?: string;
   bic?: string;
+  /** Company base / books currency. */
   defaultCurrency?: string;
+  /** Default UI display currency. */
+  defaultDisplayCurrency?: string;
+  timezone?: string;
   defaultVatRate?: string;
   invoicePrefix?: string;
 };

@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumberString,
   IsOptional,
@@ -11,6 +12,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ProjectStatus } from '@prisma/client';
+import { SUPPORTED_CURRENCIES } from '@fbm/shared';
 
 export class CreateProjectDto {
   @IsString()
@@ -88,7 +90,7 @@ export class CreateProjectDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(3)
+  @IsIn([...SUPPORTED_CURRENCIES])
   currency?: string;
 
   @IsOptional()

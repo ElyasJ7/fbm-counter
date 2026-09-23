@@ -7,12 +7,14 @@ describe('ProjectAccessService', () => {
     firstName: string;
     lastName: string;
     role: 'PROJECT_MANAGER';
+    preferredDisplayCurrency: null;
   } = {
     id: 'pm-1',
     email: 'pm@example.com',
     firstName: 'Pat',
     lastName: 'Manager',
     role: 'PROJECT_MANAGER',
+    preferredDisplayCurrency: null,
   };
   const admin: {
     id: string;
@@ -20,12 +22,14 @@ describe('ProjectAccessService', () => {
     firstName: string;
     lastName: string;
     role: 'ADMIN';
+    preferredDisplayCurrency: null;
   } = {
     id: 'admin-1',
     email: 'admin@example.com',
     firstName: 'Ada',
     lastName: 'Admin',
     role: 'ADMIN',
+    preferredDisplayCurrency: null,
   };
   const viewer: {
     id: string;
@@ -33,12 +37,14 @@ describe('ProjectAccessService', () => {
     firstName: string;
     lastName: string;
     role: 'VIEWER';
+    preferredDisplayCurrency: null;
   } = {
     id: 'viewer-1',
     email: 'viewer@example.com',
     firstName: 'Vic',
     lastName: 'Viewer',
     role: 'VIEWER',
+    preferredDisplayCurrency: null,
   };
 
   it('treats ADMIN and VIEWER as company-wide; PM as scoped', () => {

@@ -1,12 +1,14 @@
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsNumberString,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 import { PaymentMethod } from '@prisma/client';
+import { SUPPORTED_CURRENCIES } from '@fbm/shared';
 
 export class CreatePaymentDto {
   @IsString()
@@ -21,6 +23,12 @@ export class CreatePaymentDto {
 
   @IsNumberString()
   amount!: string;
+
+  /** Optional; must match invoice currency when set (cross-currency deferred). */
+  @IsOptional()
+  @IsString()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
 
   @IsOptional()
   @IsEnum(PaymentMethod)
