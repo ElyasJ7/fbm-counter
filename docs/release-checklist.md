@@ -64,9 +64,12 @@ Mark each gate **Yes** / **No**. Do not ship with any **No** on Critical gates u
 | API | http://127.0.0.1:3002/api |
 | DB | localhost:5433 / `fbm_counter_staging` |
 
-### Oracle Cloud public deploy
+### Public deploy (Oracle or Google free tier)
 
-Follow **`docs/oracle-cloud-deployment.md`** (GHCR multi-arch images, Caddy HTTPS, `/opt/fbm`, SSH deploy). Manual Oracle VM + DNS + `/opt/fbm/.env` still required before claiming cloud go-live.
+- Oracle Always Free: **`docs/oracle-cloud-deployment.md`**
+- If Oracle has no capacity: **`docs/google-cloud-free-deployment.md`** (`e2-micro`, tight RAM — use swap)
+
+Both use GHCR + Caddy + `/opt/fbm` + `./deploy.sh`. Domain + VM + `.env` secrets are still manual.
 
 ## Sign-off
 

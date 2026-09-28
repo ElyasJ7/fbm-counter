@@ -3,6 +3,9 @@
 Production-oriented deploy for an Always Free (or paid) Oracle Cloud VM using
 GitHub → GHCR → Docker Compose → Caddy (HTTPS).
 
+If Oracle capacity is unavailable, use **`docs/google-cloud-free-deployment.md`**
+(`e2-micro` Always Free) with the same `/opt/fbm` compose scripts.
+
 **Do not** store secrets in Git. Runtime secrets live only on the VM in `/opt/fbm/.env`.
 
 Related files:
