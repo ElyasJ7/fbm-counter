@@ -211,7 +211,7 @@ export class ExchangeRatesService {
 
     if (pairs.length === 0) {
       throw new ServiceUnavailableException(
-        'FX provider returned no usable rates for AFN/EUR/USD',
+        'FX provider returned no usable rates for AFN/USD',
       );
     }
 

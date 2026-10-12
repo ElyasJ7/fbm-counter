@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
-import { BUDGET_CATEGORY_LABELS } from '@fbm/shared';
+import { budgetCategoryLabel } from '@fbm/shared';
 import type { AuthUserDto } from '@fbm/shared';
 import { aggregateCosts, computeBudgetLine, money } from '@fbm/financial-core';
 import { ProjectAccessService } from '../authz/project-access.service';
@@ -154,8 +154,7 @@ export class BudgetsService {
 
       const link = `/projects/${projectId}?tab=budget`;
       const type = 'budget.overrun';
-      const categoryLabel =
-        BUDGET_CATEGORY_LABELS[line.category] ?? line.category;
+      const categoryLabel = budgetCategoryLabel(line.category);
 
       const recipients = new Set<string>();
       if (project.projectManagerId && project.projectManagerId !== actorId) {

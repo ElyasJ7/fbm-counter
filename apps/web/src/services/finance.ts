@@ -7,7 +7,6 @@ import type {
   InvoiceStatus,
   InvoiceType,
   PaginatedResponse,
-  PaymentDto,
   PaymentMethod,
 } from '@fbm/shared';
 import { apiRequest } from '../lib/api';
@@ -71,18 +70,6 @@ export type InvoiceInput = {
   paymentTerms?: string;
   notes?: string;
   items?: InvoiceItemInput[];
-};
-
-export type PaymentInput = {
-  invoiceId: string;
-  projectId?: string;
-  paymentDate: string;
-  amount: string;
-  currency?: string;
-  method?: PaymentMethod;
-  reference?: string;
-  bankReference?: string;
-  notes?: string;
 };
 
 function toQuery(params: Record<string, string | number | undefined | null>) {
@@ -183,25 +170,4 @@ export function deleteInvoice(id: string) {
 
 export function invoicePdfPath(id: string) {
   return `/invoices/${id}/pdf`;
-}
-
-export function fetchPayments(params: {
-  page?: number;
-  pageSize?: number;
-  invoiceId?: string;
-  projectId?: string;
-}) {
-  return apiRequest<PaginatedResponse<PaymentDto>>(
-    `/payments${toQuery(params)}`,
-  );
-}
-
-export function createPayment(body: PaymentInput) {
-  return apiRequest<PaymentDto>('/payments', { method: 'POST', body });
-}
-
-export function deletePayment(id: string) {
-  return apiRequest<{ success: boolean }>(`/payments/${id}`, {
-    method: 'DELETE',
-  });
 }

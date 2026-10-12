@@ -3,7 +3,6 @@ import { ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   CURRENCY_LABELS,
-  CURRENCY_SYMBOLS,
   SUPPORTED_CURRENCIES,
   roleHasPermission,
   type MoneyConversionResultDto,
@@ -34,7 +33,7 @@ import { fetchProjects } from '../services/projects';
 
 const currencyOptions = SUPPORTED_CURRENCIES.map((code) => ({
   value: code,
-  label: `${CURRENCY_SYMBOLS[code]} ${code} — ${CURRENCY_LABELS[code]}`,
+  label: `${code} — ${CURRENCY_LABELS[code]}`,
 }));
 
 function formatUpdatedAt(iso: string | null | undefined): string | null {
@@ -245,23 +244,16 @@ export function CurrencyConverterPage() {
       convertMoney({ amount: '1', fromCurrency: 'USD', toCurrency: 'AFN' }),
     enabled: canRead,
   });
-  const eurAfnQuery = useQuery({
-    queryKey: ['exchange-rates', 'convert', 'panel', 'EUR', 'AFN'],
+  const afnUsdQuery = useQuery({
+    queryKey: ['exchange-rates', 'convert', 'panel', 'AFN', 'USD'],
     queryFn: () =>
-      convertMoney({ amount: '1', fromCurrency: 'EUR', toCurrency: 'AFN' }),
-    enabled: canRead,
-  });
-  const usdEurQuery = useQuery({
-    queryKey: ['exchange-rates', 'convert', 'panel', 'USD', 'EUR'],
-    queryFn: () =>
-      convertMoney({ amount: '1', fromCurrency: 'USD', toCurrency: 'EUR' }),
+      convertMoney({ amount: '1', fromCurrency: 'AFN', toCurrency: 'USD' }),
     enabled: canRead,
   });
 
   const ratePairs = [
     { from: 'USD' as const, to: 'AFN' as const, result: usdAfnQuery.data },
-    { from: 'EUR' as const, to: 'AFN' as const, result: eurAfnQuery.data },
-    { from: 'USD' as const, to: 'EUR' as const, result: usdEurQuery.data },
+    { from: 'AFN' as const, to: 'USD' as const, result: afnUsdQuery.data },
   ];
 
   if (!canRead) {
@@ -288,7 +280,7 @@ export function CurrencyConverterPage() {
     <div className="space-y-6">
       <PageHeader
         title="Currency Converter"
-        description="Convert USD, AFN, and EUR using your company's cached exchange rates. Calculator only — nothing is written to the books."
+        description="Convert USD and AFN using your company's cached exchange rates. Calculator only — nothing is written to the books."
         actions={
           canRefresh ? (
             <Button
@@ -450,7 +442,7 @@ export function CurrencyConverterPage() {
                     </span>
                     <span className="tabular-nums text-sm text-muted">
                       {rate
-                        ? `1 ${pair.from} = ${CURRENCY_SYMBOLS[pair.to]}${rate}`
+                        ? `1 ${pair.from} = ${rate} ${pair.to}`
                         : 'Unavailable'}
                     </span>
                   </li>

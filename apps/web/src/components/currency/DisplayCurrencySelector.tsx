@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   CURRENCY_LABELS,
-  CURRENCY_SYMBOLS,
   SUPPORTED_CURRENCIES,
   type SupportedCurrency,
 } from '@fbm/shared';
@@ -11,7 +10,7 @@ import { cn } from '../../lib/cn';
 
 const options = SUPPORTED_CURRENCIES.map((code) => ({
   value: code,
-  label: `${CURRENCY_SYMBOLS[code]} ${code}`,
+  label: code,
   title: CURRENCY_LABELS[code],
 }));
 

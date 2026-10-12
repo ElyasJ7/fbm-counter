@@ -7,7 +7,6 @@ import {
   toCsvDocument,
   toDateOnlyString,
 } from '@fbm/financial-core';
-import type { BudgetCategory } from '@prisma/client';
 import type { AuthUserDto } from '@fbm/shared';
 import { ProjectAccessService } from '../authz/project-access.service';
 import { buildPdfBuffer } from '../common/pdf.util';
@@ -138,7 +137,7 @@ export class ReportsService {
         contractValue: string;
         currentBudget: string;
       }>;
-      expensesByCategory: Array<{ category: BudgetCategory; amount: string }>;
+      expensesByCategory: Array<{ category: string; amount: string }>;
       generatedAt: string;
       period: { from: string | null; to: string | null };
     },
@@ -288,7 +287,7 @@ export class ReportsService {
 
       const expensesByCategory = Object.entries(costs.byCategory)
         .map(([category, amounts]) => ({
-          category: category as BudgetCategory,
+          category,
           amount: amounts.actual,
         }))
         .filter((row) => !money(row.amount).isZero())
@@ -570,7 +569,7 @@ export class ReportsService {
 
     const expensesByCategory = Object.entries(periodCosts.byCategory)
       .map(([category, amounts]) => ({
-        category: category as BudgetCategory,
+        category,
         amount: amounts.actual,
       }))
       .filter((row) => !money(row.amount).isZero())

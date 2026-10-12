@@ -52,7 +52,7 @@ const emptyForm: ProjectInput = {
   contractValue: '0.00',
   initialBudget: '0.00',
   currentBudget: '0.00',
-  currency: 'EUR',
+  currency: 'AFN',
   progressPercent: 0,
   notes: '',
 };
@@ -187,7 +187,7 @@ export function ProjectFormPage() {
     <div className="space-y-6">
       <PageHeader
         title={isEdit ? 'Edit project' : 'New project'}
-        description="Contract value and budgets are stored as decimal amounts in EUR."
+        description="Contract value and budgets are stored as decimal amounts in the project currency (AFN or USD)."
         breadcrumbs={[
           { label: 'Projects', to: '/projects' },
           { label: isEdit ? 'Edit' : 'New' },
@@ -404,7 +404,7 @@ export function ProjectFormPage() {
             <Select
               label="Project currency"
               name="currency"
-              value={form.currency ?? 'EUR'}
+              value={form.currency ?? 'AFN'}
               options={SUPPORTED_CURRENCIES.map((code) => ({
                 value: code,
                 label: CURRENCY_LABELS[code as SupportedCurrency],
@@ -414,7 +414,7 @@ export function ProjectFormPage() {
               }
             />
             <Input
-              label={`Contract value (${form.currency ?? 'EUR'})`}
+              label={`Contract value (${form.currency ?? 'AFN'})`}
               name="contractValue"
               required
               inputMode="decimal"
@@ -424,7 +424,7 @@ export function ProjectFormPage() {
               }
             />
             <Input
-              label={`Initial budget (${form.currency ?? 'EUR'})`}
+              label={`Initial budget (${form.currency ?? 'AFN'})`}
               name="initialBudget"
               required
               inputMode="decimal"
@@ -434,7 +434,7 @@ export function ProjectFormPage() {
               }
             />
             <Input
-              label={`Current budget (${form.currency ?? 'EUR'})`}
+              label={`Current budget (${form.currency ?? 'AFN'})`}
               name="currentBudget"
               inputMode="decimal"
               value={form.currentBudget ?? ''}

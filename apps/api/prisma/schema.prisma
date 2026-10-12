@@ -29,18 +29,6 @@ enum ProjectStatus {
   CANCELLED
 }
 
-enum BudgetCategory {
-  MATERIALS
-  LABOR
-  SUBCONTRACTORS
-  EQUIPMENT
-  TRANSPORTATION
-  PERMITS
-  INSURANCE
-  PROFESSIONAL_SERVICES
-  OTHER
-}
-
 enum ExpenseStatus {
   DRAFT
   PENDING
@@ -114,7 +102,7 @@ model User {
   lastName     String
   role         Role       @default(VIEWER)
   status       UserStatus @default(ACTIVE)
-  /// Preferred UI reporting currency (AFN | EUR | USD). Null → company defaultDisplayCurrency.
+  /// Preferred UI reporting currency (AFN | USD). Null → company defaultDisplayCurrency.
   preferredDisplayCurrency String?
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
@@ -201,13 +189,13 @@ model CompanySettings {
   taxNumber              String?
   iban                   String?
   bic                    String?
-  /// Company base / books currency (AFN | EUR | USD).
-  defaultCurrency        String   @default("EUR")
+  /// Company base / books currency (AFN | USD).
+  defaultCurrency        String   @default("AFN")
   /// Default UI display/reporting currency.
-  defaultDisplayCurrency String   @default("EUR")
+  defaultDisplayCurrency String   @default("AFN")
   /// Regional timezone (business calendar dates remain date-only / UTC-safe).
   timezone               String   @default("UTC")
-  defaultVatRate         Decimal  @default(19.00) @db.Decimal(5, 2)
+  defaultVatRate         Decimal  @default(0.00) @db.Decimal(5, 2)
   invoicePrefix          String   @default("RE")
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
@@ -288,7 +276,7 @@ model Project {
   contractValue          Decimal       @default(0) @db.Decimal(19, 4)
   initialBudget          Decimal       @default(0) @db.Decimal(19, 4)
   currentBudget          Decimal       @default(0) @db.Decimal(19, 4)
-  currency               String        @default("EUR")
+  currency               String        @default("AFN")
   progressPercent        Int           @default(0)
   notes                  String?
   createdAt              DateTime      @default(now())
@@ -359,7 +347,8 @@ model BudgetLine {
   id             String         @id @default(cuid())
   projectId      String
   project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  category       BudgetCategory
+  /// Free-text category (built-in keys like MATERIALS still supported).
+  category       String
   plannedAmount  Decimal        @default(0) @db.Decimal(19, 4)
   committedAmount Decimal       @default(0) @db.Decimal(19, 4)
   actualAmount   Decimal        @default(0) @db.Decimal(19, 4)
@@ -377,7 +366,8 @@ model Expense {
   expenseNumber  String         @unique
   projectId      String?
   project        Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  category       BudgetCategory @default(OTHER)
+  /// Free-text category (built-in keys like MATERIALS still supported).
+  category       String         @default("OTHER")
   supplierId     String?
   supplier       Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   description    String
@@ -385,12 +375,12 @@ model Expense {
   invoiceDate    DateTime?
   dueDate        DateTime?
   netAmount       Decimal        @db.Decimal(19, 4)
-  taxRate         Decimal        @default(19.00) @db.Decimal(5, 2)
+  taxRate         Decimal        @default(0.00) @db.Decimal(5, 2)
   taxAmount       Decimal        @db.Decimal(19, 4)
   grossAmount     Decimal        @db.Decimal(19, 4)
   paidAmount      Decimal        @default(0) @db.Decimal(19, 4)
-  /// Transaction currency (AFN | EUR | USD). Inherited from project or company books.
-  currency        String         @default("EUR")
+  /// Transaction currency (AFN | USD). Inherited from project or company books.
+  currency        String         @default("AFN")
   status          ExpenseStatus  @default(DRAFT)
   paymentDate    DateTime?
   paymentMethod  PaymentMethod?
@@ -423,12 +413,12 @@ model Invoice {
   issueDate       DateTime
   dueDate         DateTime
   netAmount       Decimal        @db.Decimal(19, 4)
-  taxRate         Decimal        @default(19.00) @db.Decimal(5, 2)
+  taxRate         Decimal        @default(0.00) @db.Decimal(5, 2)
   taxAmount       Decimal        @db.Decimal(19, 4)
   grossAmount     Decimal        @db.Decimal(19, 4)
   paidAmount      Decimal        @default(0) @db.Decimal(19, 4)
-  /// Transaction currency (AFN | EUR | USD). Inherited from project or company books.
-  currency        String         @default("EUR")
+  /// Transaction currency (AFN | USD). Inherited from project or company books.
+  currency        String         @default("AFN")
   status          InvoiceStatus  @default(DRAFT)
   paymentTerms    String?
   notes           String?
@@ -476,7 +466,7 @@ model Payment {
   paymentDate   DateTime
   amount        Decimal       @db.Decimal(19, 4)
   /// Must match invoice.currency (cross-currency payments deferred).
-  currency      String        @default("EUR")
+  currency      String        @default("AFN")
   type          PaymentType
   method        PaymentMethod @default(BANK_TRANSFER)
   reference     String?

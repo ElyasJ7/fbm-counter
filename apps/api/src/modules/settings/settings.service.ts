@@ -65,7 +65,7 @@ export class SettingsService {
     try {
       return assertSupportedCurrency(value);
     } catch {
-      throw new BadRequestException(`${field} must be one of AFN, EUR, USD`);
+      throw new BadRequestException(`${field} must be one of AFN, USD`);
     }
   }
 
@@ -89,7 +89,7 @@ export class SettingsService {
         defaultCurrency: DEFAULT_CURRENCY,
         defaultDisplayCurrency: DEFAULT_DISPLAY_CURRENCY,
         timezone: DEFAULT_TIMEZONE,
-        defaultVatRate: 19,
+        defaultVatRate: 0,
         invoicePrefix: 'INV',
       },
     });
@@ -140,7 +140,8 @@ export class SettingsService {
           defaultCurrency,
           defaultDisplayCurrency,
           timezone,
-          defaultVatRate: dto.defaultVatRate,
+          // Afghanistan: no VAT.
+          defaultVatRate: '0',
           invoicePrefix: dto.invoicePrefix?.trim().toUpperCase(),
         },
       });

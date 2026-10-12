@@ -40,7 +40,7 @@ export class DisplayFxService {
         displayCurrency = assertSupportedCurrency(queryCurrency);
       } catch {
         throw new BadRequestException(
-          `Unsupported currency "${queryCurrency}". Allowed: AFN, EUR, USD`,
+          `Unsupported currency "${queryCurrency}". Allowed: AFN, USD`,
         );
       }
     } else {

@@ -4,13 +4,16 @@ import { computeHeaderVat } from './vat';
 
 export function formatMoneyDe(
   value: string | number | Decimal,
-  currency = 'EUR',
+  currency = 'AFN',
 ): string {
   const amount = money(value).toDecimalPlaces(2).toNumber();
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
+  const formatted = new Intl.NumberFormat('en-US', {
+    style: 'decimal',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
+  const code = String(currency || 'AFN').trim().toUpperCase() || 'AFN';
+  return `${formatted} ${code}`;
 }
 
 export function calculateTaxAmount(
@@ -86,7 +89,7 @@ export function computeProjectOverview(
     projectedProfit: asMoneyString(projectedProfit),
     profitMarginPercent,
     remainingBudget: asMoneyString(remainingBudget),
-    currency: input.currency ?? 'EUR',
+    currency: input.currency ?? 'AFN',
     financeDataAvailable: input.financeDataAvailable ?? false,
   };
 }

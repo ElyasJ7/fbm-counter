@@ -1,31 +1,19 @@
-# Expense payment integrity (H4)
+# Payment policy (expenses & invoices)
 
-## Decision: Option B — controlled state value
+## Decision: always fully paid — no Payments page
 
-Expenses do **not** share the invoice `Payment` ledger. Introducing a full
-`ExpensePayment` entity was deferred to keep this remediation minimal.
+Expenses and invoices do **not** use a payment ledger. When recorded they are
+always saved as **fully paid** (`paidAmount = grossAmount`, `status = PAID`).
 
 ### Rules
 
-- `CreateExpenseDto` / `UpdateExpenseDto` do **not** accept `paidAmount`.
-- New expenses always start with `paidAmount = 0`.
-- Payments are recorded only via `POST /api/expenses/:id/payments`
-  (`finances:write`):
-  - amount > 0
-  - amount ≤ remaining balance
-  - resulting paidAmount ≤ grossAmount
-  - status derived via `resolveExpenseStatus`
-- Generic PATCH cannot overwrite paid cash.
+- There is no Payments UI; `/payments` redirects to invoices.
+- `POST /api/payments` returns **410 Gone**.
+- Expense create/update sets `paidAmount` to gross (unless `CANCELLED`).
+- Invoice create/update sets `paidAmount` to gross (unless `CANCELLED`).
 
-### Limitation
+### Expense access
 
-Expense paid amounts are denormalized on the expense row. They are not linked
-to bank payment records. Cash-flow KPIs that use the `Payment` table will not
-automatically include expense-only payments unless a later phase adds an
-expense payment ledger (Option A).
-
-### Reversal
-
-Silent decreases via PATCH are blocked. A dedicated reversal endpoint was not
-added in this batch; correct overstatement by recording carefully or a future
-reversal workflow.
+- **Delete:** Admin only (`expenses:delete`).
+- **Create / edit:** Admin and Project Manager unrestricted; Accounting only
+  when currency is AFN and gross ≤ 5,000 AFN.

@@ -85,8 +85,8 @@ const emptyForm: InvoiceInput = {
   issueDate: todayInput(),
   dueDate: plusDaysInput(30),
   netAmount: '',
-  taxRate: '19',
-  status: 'DRAFT',
+  taxRate: '0',
+  status: 'PAID',
   projectId: '',
   customerId: '',
   supplierId: '',
@@ -169,8 +169,8 @@ export function InvoicesPage({
         dueDate: form.dueDate,
         netAmount: form.netAmount.trim(),
         currency: form.currency || currency || undefined,
-        taxRate: form.taxRate?.trim() || '19',
-        status: form.status || 'DRAFT',
+        taxRate: '0',
+        status: 'PAID',
         projectId: form.projectId || projectFilter || undefined,
         customerId:
           form.type === 'CUSTOMER'
@@ -335,14 +335,6 @@ export function InvoicesPage({
               value={form.netAmount}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, netAmount: e.target.value }))
-              }
-            />
-            <Input
-              label="VAT (%)"
-              name="taxRate"
-              value={form.taxRate ?? '19'}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, taxRate: e.target.value }))
               }
             />
             <Input
@@ -592,12 +584,6 @@ export function InvoicesPage({
                         >
                           PDF
                         </button>
-                        <Link
-                          className="text-brand hover:underline"
-                          to={`/payments?invoiceId=${invoice.id}`}
-                        >
-                          Payments
-                        </Link>
                         {canWrite ? (
                           <button
                             type="button"

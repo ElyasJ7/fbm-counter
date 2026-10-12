@@ -31,6 +31,7 @@ export const PERMISSIONS = [
   'payments:write',
   'expenses:read',
   'expenses:write',
+  'expenses:delete',
   'suppliers:read',
   'suppliers:write',
   'subcontractors:read',
@@ -115,6 +116,9 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ],
 };
 
+/** Accounting may create/edit expenses only up to this gross amount (AFN). */
+export const ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN = 5000;
+
 export function roleHasPermission(role: Role, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
@@ -125,27 +129,26 @@ export const GERMAN_VAT_RATES = {
   zero: 0,
 } as const;
 
-/** Supported transaction / display currencies (Phase B+). */
-export const SUPPORTED_CURRENCIES = ['AFN', 'EUR', 'USD'] as const;
+/** Supported transaction / display currencies (EUR removed — not used). */
+export const SUPPORTED_CURRENCIES = ['AFN', 'USD'] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
-/** Company base currency default for new installs (legacy EUR semantics). */
-export const DEFAULT_CURRENCY: SupportedCurrency = 'EUR';
+/** Company base currency default for new installs. */
+export const DEFAULT_CURRENCY: SupportedCurrency = 'AFN';
 
 /** Default display currency mirrors base until the user changes it. */
 export const DEFAULT_DISPLAY_CURRENCY: SupportedCurrency = DEFAULT_CURRENCY;
 
 export const CURRENCY_LABELS: Record<SupportedCurrency, string> = {
   AFN: 'Afghan Afghani (AFN)',
-  EUR: 'Euro (EUR)',
   USD: 'US Dollar (USD)',
 };
 
+/** Display codes only — no currency symbols in the UI. */
 export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
-  AFN: '؋',
-  EUR: '€',
-  USD: '$',
+  AFN: 'AFN',
+  USD: 'USD',
 };
 
 export function isSupportedCurrency(value: string): value is SupportedCurrency {
@@ -331,9 +334,10 @@ export const BUDGET_CATEGORIES = [
   'OTHER',
 ] as const;
 
-export type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
+/** Built-in category keys; free-text categories are also allowed. */
+export type BudgetCategory = (typeof BUDGET_CATEGORIES)[number] | string;
 
-export const BUDGET_CATEGORY_LABELS: Record<BudgetCategory, string> = {
+export const BUDGET_CATEGORY_LABELS: Record<string, string> = {
   MATERIALS: 'Materials',
   LABOR: 'Labor',
   SUBCONTRACTORS: 'Subcontractors',
@@ -344,6 +348,13 @@ export const BUDGET_CATEGORY_LABELS: Record<BudgetCategory, string> = {
   PROFESSIONAL_SERVICES: 'Professional Services',
   OTHER: 'Other',
 };
+
+/** Display label for a built-in or free-text category. */
+export function budgetCategoryLabel(category: string): string {
+  const key = category.trim();
+  if (!key) return 'Other';
+  return BUDGET_CATEGORY_LABELS[key] ?? key;
+}
 
 export const EXPENSE_STATUSES = [
   'DRAFT',
@@ -485,7 +496,7 @@ export type ExpenseDto = {
   taxAmount: string;
   grossAmount: string;
   paidAmount: string;
-  /** Transaction currency (AFN | EUR | USD). */
+  /** Transaction currency (AFN | USD). */
   currency: string;
   status: ExpenseStatus;
   paymentDate: string | null;
@@ -520,7 +531,7 @@ export type InvoiceDto = {
   taxAmount: string;
   grossAmount: string;
   paidAmount: string;
-  /** Transaction currency (AFN | EUR | USD). */
+  /** Transaction currency (AFN | USD). */
   currency: string;
   status: InvoiceStatus;
   paymentTerms: string | null;
@@ -766,7 +777,7 @@ export type CompanySettingsDto = {
   taxNumber: string | null;
   iban: string | null;
   bic: string | null;
-  /** Company base / books currency (AFN | EUR | USD). */
+  /** Company base / books currency (AFN | USD). */
   defaultCurrency: string;
   /** Default UI reporting currency for users without a personal preference. */
   defaultDisplayCurrency: string;

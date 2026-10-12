@@ -5,7 +5,6 @@ import {
   ChevronsRight,
   CircleDollarSign,
   Contact,
-  CreditCard,
   FileText,
   FolderOpen,
   Hammer,
@@ -81,12 +80,6 @@ const navGroups: NavGroup[] = [
         label: 'Invoices',
         icon: FileText,
         permission: 'invoices:read',
-      },
-      {
-        to: '/payments',
-        label: 'Payments',
-        icon: CreditCard,
-        permission: 'payments:read',
       },
       {
         to: '/expenses',

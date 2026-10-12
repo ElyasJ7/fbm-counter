@@ -190,9 +190,6 @@ export function DashboardPage() {
   const canWriteInvoices = user
     ? roleHasPermission(user.role, 'invoices:write')
     : false;
-  const canWritePayments = user
-    ? roleHasPermission(user.role, 'payments:write')
-    : false;
   const canReadAudit = user
     ? roleHasPermission(user.role, 'audit:read')
     : false;
@@ -398,13 +395,6 @@ export function DashboardPage() {
                 </Button>
               </Link>
             ) : null}
-            {canWritePayments ? (
-              <Link to="/payments">
-                <Button size="sm" variant="secondary">
-                  Record payment
-                </Button>
-              </Link>
-            ) : null}
           </div>
         }
       />
@@ -422,10 +412,10 @@ export function DashboardPage() {
           value={
             <CurrencyValue value={kpis.totalRevenue} currency={currency} size="lg" />
           }
-          hint="Customer invoice payments received"
+          hint="Customer invoice amounts received"
           icon={<ArrowDownLeft className="h-4 w-4" />}
           tone="success"
-          to={canReadInvoices ? '/payments' : undefined}
+          to={canReadInvoices ? '/invoices' : undefined}
         />
         <DashboardKpiCard
           label="Actual costs"

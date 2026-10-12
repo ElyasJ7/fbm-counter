@@ -28,7 +28,7 @@ export class ExchangeRateApiProvider implements ExchangeRateProvider {
       throw new Error('ExchangeRate-API key is not configured');
     }
 
-    // Fetch from USD pivot for consistent cross-rates among AFN/EUR/USD
+    // Fetch from USD pivot for consistent cross-rates among AFN/USD
     const url = `${this.baseUrl}/${this.apiKey!.trim()}/latest/USD`;
     const response = await fetch(url, {
       headers: { Accept: 'application/json' },

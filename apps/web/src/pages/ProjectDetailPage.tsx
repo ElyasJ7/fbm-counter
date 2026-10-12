@@ -11,8 +11,8 @@ import {
   BUDGET_CATEGORIES,
   BUDGET_CATEGORY_LABELS,
   SUBCONTRACTOR_TRADE_LABELS,
+  budgetCategoryLabel,
   roleHasPermission,
-  type BudgetCategory,
 } from '@fbm/shared';
 import { ProjectStatusBadge } from '../components/projects/ProjectStatusBadge';
 import { Button } from '../components/ui/Button';
@@ -50,7 +50,6 @@ import {
 import { DocumentsPage } from './DocumentsPage';
 import { ExpensesPage } from './ExpensesPage';
 import { InvoicesPage } from './InvoicesPage';
-import { PaymentsPage } from './PaymentsPage';
 
 const READY_TABS = [
   'overview',
@@ -58,7 +57,6 @@ const READY_TABS = [
   'budget',
   'expenses',
   'invoices',
-  'payments',
   'subcontractors',
   'documents',
   'activity',
@@ -72,7 +70,6 @@ const tabs = [
   { id: 'budget', label: 'Budget' },
   { id: 'expenses', label: 'Expenses' },
   { id: 'invoices', label: 'Invoices' },
-  { id: 'payments', label: 'Payments' },
   { id: 'subcontractors', label: 'Subcontractors' },
   { id: 'documents', label: 'Documents' },
   { id: 'activity', label: 'Activity' },
@@ -104,7 +101,7 @@ function Metric({
 }
 
 type DraftLine = {
-  category: BudgetCategory;
+  category: string;
   plannedAmount: string;
   notes: string;
 };
@@ -122,6 +119,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
   });
 
   const [draft, setDraft] = useState<DraftLine[]>([]);
+  const [newCategory, setNewCategory] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const savedByCategory = useMemo(() => {
@@ -135,16 +133,22 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
     const byCategory = new Map(
       budgetQuery.data.data.map((line) => [line.category, line]),
     );
-    setDraft(
-      BUDGET_CATEGORIES.map((category) => {
-        const existing = byCategory.get(category);
-        return {
-          category,
-          plannedAmount: existing?.plannedAmount ?? '0',
-          notes: existing?.notes ?? '',
-        };
-      }),
-    );
+    const presetRows = BUDGET_CATEGORIES.map((category) => {
+      const existing = byCategory.get(category);
+      return {
+        category,
+        plannedAmount: existing?.plannedAmount ?? '0',
+        notes: existing?.notes ?? '',
+      };
+    });
+    const customRows = budgetQuery.data.data
+      .filter((line) => !(BUDGET_CATEGORIES as readonly string[]).includes(line.category))
+      .map((line) => ({
+        category: line.category,
+        plannedAmount: line.plannedAmount,
+        notes: line.notes ?? '',
+      }));
+    setDraft([...presetRows, ...customRows]);
   }, [budgetQuery.data]);
 
   const saveMutation = useMutation({
@@ -219,17 +223,16 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
           <tbody>
             {draft.map((line, index) => {
               const saved = savedByCategory.get(line.category);
+              const label = budgetCategoryLabel(line.category);
               return (
-                <tr key={line.category} className="border-b border-slate-100">
-                  <td className="px-3 py-3 font-medium">
-                    {BUDGET_CATEGORY_LABELS[line.category]}
-                  </td>
+                <tr key={`${line.category}-${index}`} className="border-b border-slate-100">
+                  <td className="px-3 py-3 font-medium">{label}</td>
                   <td className="px-3 py-3">
                     {canWrite ? (
                       <input
                         className="h-9 w-28 rounded-md border border-[var(--color-border)] bg-white px-2"
                         name={`planned-${line.category}`}
-                        aria-label={`Planned ${BUDGET_CATEGORY_LABELS[line.category]}`}
+                        aria-label={`Planned ${label}`}
                         value={line.plannedAmount}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -260,7 +263,7 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
                       <input
                         className="h-9 w-full min-w-40 rounded-md border border-[var(--color-border)] bg-white px-2"
                         name={`notes-${line.category}`}
-                        aria-label={`Note ${BUDGET_CATEGORY_LABELS[line.category]}`}
+                        aria-label={`Note ${label}`}
                         value={line.notes}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -285,7 +288,40 @@ function ProjectBudgetTab({ projectId }: { projectId: string }) {
         <p className="mt-3 text-sm text-[var(--color-danger)]">{error}</p>
       ) : null}
       {canWrite ? (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <Input
+            label="Add category"
+            name="newCategory"
+            value={newCategory}
+            placeholder="Free-text category"
+            onChange={(e) => setNewCategory(e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              const trimmed = newCategory.trim();
+              if (!trimmed) return;
+              const exists = draft.some(
+                (row) =>
+                  row.category.toLowerCase() === trimmed.toLowerCase() ||
+                  budgetCategoryLabel(row.category).toLowerCase() ===
+                    trimmed.toLowerCase(),
+              );
+              if (exists) {
+                setError('Category already exists in this budget.');
+                return;
+              }
+              setError(null);
+              setDraft((prev) => [
+                ...prev,
+                { category: trimmed, plannedAmount: '0', notes: '' },
+              ]);
+              setNewCategory('');
+            }}
+          >
+            Add
+          </Button>
           <Button
             disabled={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
@@ -409,9 +445,6 @@ function ProjectFinancialsTab({
           </Button>
           <Button variant="secondary" onClick={() => onTab('invoices')}>
             Invoices
-          </Button>
-          <Button variant="secondary" onClick={() => onTab('payments')}>
-            Payments
           </Button>
           <Link to={`/reports`}>
             <Button variant="secondary">Reports</Button>
@@ -1007,7 +1040,7 @@ export function ProjectDetailPage() {
               {!overview.financeDataAvailable ? (
                 <p className="mt-4 text-sm text-muted">
                   Cost and revenue figures stay at zero until invoices,
-                  payments, and expenses are recorded for this project.
+                  invoices, and expenses are recorded for this project.
                 </p>
               ) : null}
             </Card>
@@ -1081,13 +1114,6 @@ export function ProjectDetailPage() {
       ) : null}
       {activeTab === 'invoices' ? (
         <InvoicesPage
-          embeddedProjectId={project.id}
-          compact
-          currency={project.currency}
-        />
-      ) : null}
-      {activeTab === 'payments' ? (
-        <PaymentsPage
           embeddedProjectId={project.id}
           compact
           currency={project.currency}

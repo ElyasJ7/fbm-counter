@@ -11,7 +11,6 @@ import { FinancesPage } from './pages/FinancesPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotificationsPage } from './pages/NotificationsPage';
-import { PaymentsPage } from './pages/PaymentsPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { ProjectFormPage } from './pages/ProjectFormPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -38,7 +37,7 @@ export default function App() {
             <Route path="customers" element={<CustomersPage />} />
             <Route path="finances" element={<FinancesPage />} />
             <Route path="invoices" element={<InvoicesPage />} />
-            <Route path="payments" element={<PaymentsPage />} />
+            <Route path="payments" element={<Navigate to="/invoices" replace />} />
             <Route path="expenses" element={<ExpensesPage />} />
             <Route
               path="currency-converter"

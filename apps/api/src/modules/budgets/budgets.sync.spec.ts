@@ -1,6 +1,5 @@
 import { Test } from '@nestjs/testing';
 import {
-  BudgetCategory,
   ExpenseStatus,
   InvoiceStatus,
   InvoiceType,
@@ -28,6 +27,7 @@ describe('Budget sync vs project overview actuals', () => {
     firstName: string;
     lastName: string;
     role: 'ACCOUNTING';
+    preferredDisplayCurrency: string | null;
   };
 
   beforeAll(async () => {
@@ -74,6 +74,7 @@ describe('Budget sync vs project overview actuals', () => {
       firstName: actor.firstName,
       lastName: actor.lastName,
       role: 'ACCOUNTING',
+      preferredDisplayCurrency: null,
     };
 
     const customer = await prisma.customer.create({
@@ -98,7 +99,7 @@ describe('Budget sync vs project overview actuals', () => {
     await prisma.budgetLine.create({
       data: {
         projectId,
-        category: BudgetCategory.OTHER,
+        category: 'OTHER',
         plannedAmount: '5000',
         actualAmount: '0',
         committedAmount: '0',
@@ -131,7 +132,7 @@ describe('Budget sync vs project overview actuals', () => {
       data: {
         expenseNumber: `EX-BUD-${Date.now()}`,
         projectId,
-        category: BudgetCategory.OTHER,
+        category: 'OTHER',
         description: 'Sync test expense',
         netAmount: '100',
         taxRate: '19',

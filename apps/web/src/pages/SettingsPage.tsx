@@ -48,7 +48,7 @@ const emptyForm: SettingsInput = {
   defaultCurrency: DEFAULT_CURRENCY,
   defaultDisplayCurrency: DEFAULT_DISPLAY_CURRENCY,
   timezone: DEFAULT_TIMEZONE,
-  defaultVatRate: '19',
+  defaultVatRate: '0',
   invoicePrefix: 'INV',
 };
 
@@ -186,7 +186,7 @@ export function SettingsPage() {
           .toUpperCase() || DEFAULT_DISPLAY_CURRENCY) as SupportedCurrency,
         timezone: (form.timezone?.trim() ||
           DEFAULT_TIMEZONE) as SupportedTimezone,
-        defaultVatRate: form.defaultVatRate?.trim() || '19',
+        defaultVatRate: '0',
         invoicePrefix: form.invoicePrefix?.trim().toUpperCase() || 'INV',
       };
       return updateSettings(payload);
@@ -322,7 +322,7 @@ export function SettingsPage() {
 
             <FormSection title="Tax">
               <Input
-                label="VAT ID"
+                label="Tax ID"
                 name="vatId"
                 value={form.vatId ?? ''}
                 onChange={(e) =>
@@ -337,6 +337,10 @@ export function SettingsPage() {
                   setForm((prev) => ({ ...prev, taxNumber: e.target.value }))
                 }
               />
+              <p className="text-xs text-muted md:col-span-2">
+                VAT is not used (Afghanistan). All invoices and expenses are
+                recorded without tax.
+              </p>
             </FormSection>
 
             <FormSection title="Bank details">
@@ -402,17 +406,6 @@ export function SettingsPage() {
 
             <FormSection title="Invoice defaults">
               <Input
-                label="Default VAT %"
-                name="defaultVatRate"
-                value={form.defaultVatRate ?? '19'}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    defaultVatRate: e.target.value,
-                  }))
-                }
-              />
-              <Input
                 label="Invoice prefix (customer invoices)"
                 name="invoicePrefix"
                 value={form.invoicePrefix ?? 'INV'}
@@ -426,7 +419,7 @@ export function SettingsPage() {
             </FormSection>
             <p className="-mt-4 text-xs text-muted">
               The invoice prefix applies to customer invoices. Supplier invoices
-              continue to use the SI prefix. Supported currencies: AFN, EUR,
+              continue to use the SI prefix. Supported currencies: AFN,
               USD.
             </p>
 
@@ -467,7 +460,7 @@ export function SettingsPage() {
 
           <Card title="Tax & bank">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="VAT ID" value={settings.vatId} />
+              <Field label="Tax ID" value={settings.vatId} />
               <Field label="Tax number" value={settings.taxNumber} />
               <Field label="IBAN" value={settings.iban} />
               <Field label="BIC" value={settings.bic} />
@@ -592,13 +585,10 @@ export function SettingsPage() {
           <Card title="Invoice defaults" className="lg:col-span-2">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label="Default VAT"
-                value={`${settings.defaultVatRate} %`}
-              />
-              <Field
                 label="Invoice prefix"
                 value={settings.invoicePrefix}
               />
+              <Field label="VAT" value="Not used (0%)" />
             </div>
             {!canWrite ? (
               <p className="mt-4 text-xs text-muted">

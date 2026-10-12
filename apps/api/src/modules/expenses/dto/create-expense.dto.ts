@@ -8,7 +8,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { BudgetCategory, ExpenseStatus, PaymentMethod } from '@prisma/client';
+import { ExpenseStatus, PaymentMethod } from '@prisma/client';
 import { SUPPORTED_CURRENCIES } from '@fbm/shared';
 
 export class CreateExpenseDto {
@@ -22,8 +22,10 @@ export class CreateExpenseDto {
   projectId?: string;
 
   @IsOptional()
-  @IsEnum(BudgetCategory)
-  category?: BudgetCategory;
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  category?: string;
 
   @IsOptional()
   @IsString()

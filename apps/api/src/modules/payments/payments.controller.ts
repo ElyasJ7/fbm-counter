@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  GoneException,
   Param,
   Post,
   Query,
@@ -11,47 +12,49 @@ import type { AuthUserDto } from '@fbm/shared';
 import { RequirePermissions } from '../../common/decorators/auth.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { PaymentsService } from './payments.service';
 
+/**
+ * Payments UI and ledger recording are retired. Invoices/expenses are
+ * recorded as fully paid; this controller stays only to return 410 Gone.
+ */
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  private gone(): never {
+    throw new GoneException(
+      'Payments recording was removed. Record invoices and expenses as fully paid amounts.',
+    );
+  }
 
   @Get()
   @RequirePermissions('payments:read')
   findAll(
-    @CurrentUser() user: AuthUserDto,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
-    @Query('invoiceId') invoiceId?: string,
-    @Query('projectId') projectId?: string,
+    @CurrentUser() _user: AuthUserDto,
+    @Query('page') _page?: string,
+    @Query('pageSize') _pageSize?: string,
+    @Query('invoiceId') _invoiceId?: string,
+    @Query('projectId') _projectId?: string,
   ) {
-    return this.paymentsService.findAll(
-      {
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
-        invoiceId,
-        projectId,
-      },
-      user,
-    );
+    return this.gone();
   }
 
   @Get(':id')
   @RequirePermissions('payments:read')
-  findOne(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    return this.paymentsService.findOne(id, user);
+  findOne(@Param('id') _id: string, @CurrentUser() _user: AuthUserDto) {
+    return this.gone();
   }
 
   @Post()
   @RequirePermissions('payments:write')
-  create(@Body() dto: CreatePaymentDto, @CurrentUser() user: AuthUserDto) {
-    return this.paymentsService.create(dto, user);
+  create(
+    @Body() _dto: CreatePaymentDto,
+    @CurrentUser() _user: AuthUserDto,
+  ) {
+    return this.gone();
   }
 
   @Delete(':id')
   @RequirePermissions('payments:write')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
-    return this.paymentsService.remove(id, user);
+  remove(@Param('id') _id: string, @CurrentUser() _user: AuthUserDto) {
+    return this.gone();
   }
 }

@@ -202,7 +202,7 @@ export function SuppliersPage() {
               />
             </div>
             <Input
-              label="VAT ID"
+              label="Tax ID"
               name="vatId"
               value={form.vatId ?? ''}
               onChange={(e) =>

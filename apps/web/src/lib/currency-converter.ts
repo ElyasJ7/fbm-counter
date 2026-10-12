@@ -34,9 +34,7 @@ export const AFN_QUICK_AMOUNTS = [
 
 export function quickAmountsFor(from: SupportedCurrency): readonly string[] {
   if (from === 'USD') return USD_QUICK_AMOUNTS;
-  if (from === 'AFN') return AFN_QUICK_AMOUNTS;
-  // EUR: reuse USD-style magnitudes
-  return USD_QUICK_AMOUNTS;
+  return AFN_QUICK_AMOUNTS;
 }
 
 /** Decimal-safe unit × quantity for material cost (storage precision). */

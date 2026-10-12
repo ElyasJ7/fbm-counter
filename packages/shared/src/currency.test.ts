@@ -10,14 +10,16 @@ import {
 } from './index.ts';
 
 describe('supported currencies', () => {
-  it('accepts AFN, EUR, USD', () => {
-    assert.deepEqual([...SUPPORTED_CURRENCIES], ['AFN', 'EUR', 'USD']);
+  it('accepts AFN and USD only', () => {
+    assert.deepEqual([...SUPPORTED_CURRENCIES], ['AFN', 'USD']);
     assert.equal(isSupportedCurrency('afn'), true);
     assert.equal(assertSupportedCurrency('usd'), 'USD');
   });
 
-  it('rejects unknown codes', () => {
+  it('rejects EUR and other unknown codes', () => {
+    assert.equal(isSupportedCurrency('EUR'), false);
     assert.equal(isSupportedCurrency('GBP'), false);
+    assert.throws(() => assertSupportedCurrency('EUR'), /Unsupported currency/);
     assert.throws(() => assertSupportedCurrency('GBP'), /Unsupported currency/);
   });
 });

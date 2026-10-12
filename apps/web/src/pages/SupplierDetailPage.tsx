@@ -260,7 +260,7 @@ export function SupplierDetailPage() {
               />
             </div>
             <Input
-              label="VAT ID"
+              label="Tax ID"
               name="vatId"
               value={form.vatId ?? ''}
               onChange={(e) =>
@@ -354,7 +354,7 @@ export function SupplierDetailPage() {
         <Card title="Payment details">
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-muted">VAT ID</dt>
+              <dt className="text-muted">Tax ID</dt>
               <dd>{supplier.vatId ?? '—'}</dd>
             </div>
             <div>

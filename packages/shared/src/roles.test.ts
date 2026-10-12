@@ -39,4 +39,14 @@ describe('roleHasPermission', () => {
     assert.equal(roleHasPermission('PROJECT_MANAGER', 'expenses:write'), true);
     assert.equal(roleHasPermission('VIEWER', 'finances:approve'), false);
   });
+
+  it('allows only ADMIN to delete expenses', () => {
+    assert.equal(roleHasPermission('ADMIN', 'expenses:delete'), true);
+    assert.equal(roleHasPermission('ACCOUNTING', 'expenses:delete'), false);
+    assert.equal(
+      roleHasPermission('PROJECT_MANAGER', 'expenses:delete'),
+      false,
+    );
+    assert.equal(roleHasPermission('MANAGEMENT', 'expenses:delete'), false);
+  });
 });

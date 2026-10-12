@@ -10,11 +10,13 @@ import {
 } from '@nestjs/common';
 import { ExpenseStatus } from '@prisma/client';
 import type { AuthUserDto } from '@fbm/shared';
-import { RequirePermissions } from '../../common/decorators/auth.decorators';
+import {
+  RequirePermissions,
+  Roles,
+} from '../../common/decorators/auth.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
-import { RecordExpensePaymentDto } from './dto/record-expense-payment.dto';
 import { ExpensesService } from './expenses.service';
 
 @Controller('expenses')
@@ -65,16 +67,6 @@ export class ExpensesController {
     return this.expensesService.update(id, dto, user);
   }
 
-  @Post(':id/payments')
-  @RequirePermissions('finances:write')
-  recordPayment(
-    @Param('id') id: string,
-    @Body() dto: RecordExpensePaymentDto,
-    @CurrentUser() user: AuthUserDto,
-  ) {
-    return this.expensesService.recordPayment(id, dto, user);
-  }
-
   /** Approval is a distinct financial control — not covered by expenses:write. */
   @Patch(':id/approve')
   @RequirePermissions('finances:approve')
@@ -83,7 +75,8 @@ export class ExpensesController {
   }
 
   @Delete(':id')
-  @RequirePermissions('expenses:write')
+  @Roles('ADMIN')
+  @RequirePermissions('expenses:delete')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUserDto) {
     return this.expensesService.remove(id, user);
   }

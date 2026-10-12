@@ -416,7 +416,7 @@ export function SubcontractorDetailPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-muted">VAT ID</dt>
+              <dt className="text-muted">Tax ID</dt>
               <dd>{row.vatId ?? '—'}</dd>
             </div>
             <div>

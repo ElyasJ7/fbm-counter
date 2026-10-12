@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,12 +9,13 @@ import { ExpenseStatus, Prisma, Role } from '@prisma/client';
 import {
   calculateGrossAmount,
   calculateTaxAmount,
-  applyPaymentToExpense,
-  assertValidExpensePaidAmount,
   money,
   resolveExpenseStatus,
 } from '@fbm/financial-core';
-import type { AuthUserDto } from '@fbm/shared';
+import {
+  ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN,
+  type AuthUserDto,
+} from '@fbm/shared';
 import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
@@ -21,7 +23,6 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { resolveTransactionCurrency } from '../common/transaction-currency';
 import type { CreateExpenseDto } from './dto/create-expense.dto';
 import type { UpdateExpenseDto } from './dto/update-expense.dto';
-import type { RecordExpensePaymentDto } from './dto/record-expense-payment.dto';
 
 const expenseInclude = {
   project: { select: { id: true, projectNumber: true, name: true } },
@@ -118,6 +119,40 @@ export class ExpensesService {
     });
     if (!supplier) {
       throw new BadRequestException('Supplier not found');
+    }
+  }
+
+  private normalizeCategory(category?: string | null): string {
+    const trimmed = category?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : 'OTHER';
+  }
+
+  /**
+   * ADMIN / PROJECT_MANAGER: full write.
+   * ACCOUNTING: create/edit only when gross ≤ 5,000 AFN (AFN currency required).
+   */
+  private assertCanWriteExpenseAmount(
+    user: AuthUserDto,
+    grossAmount: string,
+    currency: string,
+  ) {
+    if (user.role === Role.ADMIN || user.role === Role.PROJECT_MANAGER) {
+      return;
+    }
+    if (user.role !== Role.ACCOUNTING) {
+      throw new ForbiddenException(
+        'Only Admin, Project Manager, or Accounting can edit expenses',
+      );
+    }
+    if (currency.trim().toUpperCase() !== 'AFN') {
+      throw new ForbiddenException(
+        `Accounting may only record expenses in AFN (limit ${ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN} AFN)`,
+      );
+    }
+    if (money(grossAmount).greaterThan(ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN)) {
+      throw new ForbiddenException(
+        `Accounting expense limit is ${ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN} AFN gross`,
+      );
     }
   }
 
@@ -221,24 +256,29 @@ export class ExpensesService {
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
-      const settings = await tx.companySettings.findFirst({
-        select: { defaultVatRate: true },
-      });
       const currency = await resolveTransactionCurrency(tx, {
         explicit: dto.currency,
         projectId: dto.projectId,
       });
-      const taxRate =
-        dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
+      // Afghanistan: no VAT — always 0%.
+      const taxRate = '0';
       const amounts = this.computeTax(dto.netAmount, taxRate);
+      this.assertCanWriteExpenseAmount(user, amounts.grossAmount, currency);
       const expenseNumber =
         dto.expenseNumber ?? (await this.nextExpenseNumber(tx));
+      // Expenses are always recorded fully paid — no partial payment ledger.
+      const status =
+        dto.status === ExpenseStatus.CANCELLED
+          ? ExpenseStatus.CANCELLED
+          : ExpenseStatus.PAID;
+      const paidAmount =
+        status === ExpenseStatus.CANCELLED ? '0' : amounts.grossAmount;
 
       const row = await tx.expense.create({
         data: {
           expenseNumber,
           projectId: dto.projectId,
-          category: dto.category,
+          category: this.normalizeCategory(dto.category),
           supplierId: dto.supplierId,
           description: dto.description,
           invoiceNumber: dto.invoiceNumber,
@@ -248,10 +288,17 @@ export class ExpensesService {
           taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
-          paidAmount: '0',
+          paidAmount,
           currency,
-          status: dto.status ?? ExpenseStatus.DRAFT,
-          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : undefined,
+          status,
+          paymentDate:
+            status === ExpenseStatus.PAID
+              ? dto.paymentDate
+                ? new Date(dto.paymentDate)
+                : new Date()
+              : dto.paymentDate
+                ? new Date(dto.paymentDate)
+                : undefined,
           paymentMethod: dto.paymentMethod,
           notes: dto.notes,
         },
@@ -313,31 +360,20 @@ export class ExpensesService {
     }
 
     const netAmount = dto.netAmount ?? existing.netAmount.toString();
-    const taxRate = dto.taxRate ?? existing.taxRate.toString();
+    // Afghanistan: no VAT — always 0%.
+    const taxRate = '0';
     const amounts =
-      dto.netAmount !== undefined || dto.taxRate !== undefined
+      dto.netAmount !== undefined ||
+      !money(existing.taxRate).isZero() ||
+      !money(existing.taxAmount).isZero()
         ? this.computeTax(netAmount, taxRate)
         : {
-            taxAmount: existing.taxAmount.toString(),
-            grossAmount: existing.grossAmount.toString(),
+            taxAmount: '0',
+            grossAmount: money(netAmount).toFixed(4),
           };
-
-    const paidAmount = existing.paidAmount.toString();
-    try {
-      assertValidExpensePaidAmount(paidAmount, amounts.grossAmount);
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'Invalid paid amount',
-      );
-    }
 
     let nextCurrency = existing.currency;
     if (dto.currency !== undefined) {
-      if (!money(paidAmount).isZero()) {
-        throw new BadRequestException(
-          'Cannot change expense currency after payments have been recorded',
-        );
-      }
       nextCurrency = await resolveTransactionCurrency(this.prisma, {
         explicit: dto.currency,
         projectId:
@@ -345,13 +381,14 @@ export class ExpensesService {
       });
     } else if (
       dto.projectId !== undefined &&
-      dto.projectId !== existing.projectId &&
-      money(paidAmount).isZero()
+      dto.projectId !== existing.projectId
     ) {
       nextCurrency = await resolveTransactionCurrency(this.prisma, {
         projectId: dto.projectId,
       });
     }
+
+    this.assertCanWriteExpenseAmount(user, amounts.grossAmount, nextCurrency);
 
     const dueDate =
       dto.dueDate === undefined
@@ -360,12 +397,17 @@ export class ExpensesService {
           ? new Date(dto.dueDate)
           : null;
     const requestedStatus = dto.status ?? existing.status;
-    const status = resolveExpenseStatus({
-      currentStatus: requestedStatus,
-      grossAmount: amounts.grossAmount,
-      paidAmount,
-      dueDate,
-    });
+    const status =
+      requestedStatus === ExpenseStatus.CANCELLED
+        ? ExpenseStatus.CANCELLED
+        : resolveExpenseStatus({
+            currentStatus: ExpenseStatus.PAID,
+            grossAmount: amounts.grossAmount,
+            paidAmount: amounts.grossAmount,
+            dueDate,
+          });
+    const paidAmount =
+      status === ExpenseStatus.CANCELLED ? '0' : amounts.grossAmount;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.expense.update({
@@ -373,7 +415,10 @@ export class ExpensesService {
         data: {
           expenseNumber: dto.expenseNumber,
           projectId: dto.projectId,
-          category: dto.category,
+          category:
+            dto.category !== undefined
+              ? this.normalizeCategory(dto.category)
+              : undefined,
           supplierId: dto.supplierId,
           description: dto.description,
           invoiceNumber: dto.invoiceNumber,
@@ -390,15 +435,17 @@ export class ExpensesService {
                 ? new Date(dto.dueDate)
                 : null,
           netAmount: dto.netAmount,
-          taxRate: dto.taxRate,
+          taxRate,
           taxAmount: amounts.taxAmount,
           grossAmount: amounts.grossAmount,
+          paidAmount,
           currency: nextCurrency,
-          // paidAmount is intentionally omitted — use recordPayment()
           status,
           paymentDate:
             dto.paymentDate === undefined
-              ? undefined
+              ? status === ExpenseStatus.PAID && !existing.paymentDate
+                ? new Date()
+                : undefined
               : dto.paymentDate
                 ? new Date(dto.paymentDate)
                 : null,
@@ -438,86 +485,6 @@ export class ExpensesService {
     for (const projectId of projectIds) {
       await this.budgets
         .syncAndNotifyOverruns(projectId, actorId)
-        .catch(() => undefined);
-    }
-    return updated;
-  }
-
-  /**
-   * Controlled payment recording for expenses.
-   * Limitation: expenses do not share the invoice Payment ledger; paidAmount is
-   * stored on the expense row and only mutated through this endpoint (Option B).
-   */
-  async recordPayment(
-    id: string,
-    dto: RecordExpensePaymentDto,
-    user: AuthUserDto,
-  ) {
-    const actorId = user.id;
-    await this.projectAccess.assertCanAccessExpense(user, id);
-    const existing = await this.prisma.expense.findFirst({
-      where: { id, deletedAt: null },
-      include: expenseInclude,
-    });
-    if (!existing) {
-      throw new NotFoundException('Expense not found');
-    }
-
-    let applied;
-    try {
-      applied = applyPaymentToExpense({
-        grossAmount: existing.grossAmount.toString(),
-        paidAmount: existing.paidAmount.toString(),
-        paymentAmount: dto.amount,
-        currentStatus: existing.status,
-        dueDate: existing.dueDate,
-      });
-      assertValidExpensePaidAmount(
-        applied.newPaidAmount,
-        existing.grossAmount.toString(),
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'Invalid expense payment',
-      );
-    }
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const row = await tx.expense.update({
-        where: { id },
-        data: {
-          paidAmount: applied.newPaidAmount,
-          status: applied.status,
-          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
-          paymentMethod: dto.paymentMethod ?? existing.paymentMethod,
-        },
-        include: expenseInclude,
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          action: 'EXPENSE_PAYMENT_RECORDED',
-          entityType: 'Expense',
-          entityId: id,
-          previousValue: {
-            paidAmount: existing.paidAmount.toString(),
-            status: existing.status,
-          },
-          newValue: {
-            paidAmount: row.paidAmount.toString(),
-            status: row.status,
-            paymentAmount: dto.amount,
-          },
-        },
-      });
-
-      return this.serialize(row);
-    });
-
-    if (updated.projectId) {
-      await this.budgets
-        .syncAndNotifyOverruns(updated.projectId, actorId)
         .catch(() => undefined);
     }
     return updated;
@@ -606,6 +573,9 @@ export class ExpensesService {
   }
 
   async remove(id: string, user: AuthUserDto) {
+    if (user.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only administrators can delete expenses');
+    }
     const actorId = user.id;
     await this.projectAccess.assertCanAccessExpense(user, id);
     const existing = await this.prisma.expense.findFirst({

@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import {
   BUDGET_CATEGORY_LABELS,
   roleHasPermission,
-  type BudgetCategory,
   type ProjectStatus,
   type ReportExportType,
 } from '@fbm/shared';
@@ -171,9 +170,7 @@ export function ReportsPage() {
   const categoryData = useMemo(
     () =>
       (query.data?.expensesByCategory ?? []).map((row) => ({
-        name:
-          BUDGET_CATEGORY_LABELS[row.category as BudgetCategory] ??
-          row.category,
+        name: BUDGET_CATEGORY_LABELS[row.category] ?? row.category,
         value: toNumber(row.amount),
       })),
     [query.data?.expensesByCategory],

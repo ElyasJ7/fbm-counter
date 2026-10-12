@@ -2,14 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN,
   BUDGET_CATEGORIES,
   BUDGET_CATEGORY_LABELS,
   CURRENCY_LABELS,
   EXPENSE_STATUSES,
   EXPENSE_STATUS_LABELS,
   SUPPORTED_CURRENCIES,
+  budgetCategoryLabel,
   roleHasPermission,
-  type BudgetCategory,
   type ExpenseStatus,
   type SupportedCurrency,
 } from '@fbm/shared';
@@ -47,9 +48,9 @@ import { fetchProjects } from '../services/projects';
 const emptyForm: ExpenseInput = {
   description: '',
   netAmount: '',
-  taxRate: '19',
+  taxRate: '0',
   category: 'OTHER',
-  status: 'DRAFT',
+  status: 'PAID',
   projectId: '',
   supplierId: '',
   currency: undefined,
@@ -72,9 +73,16 @@ export function ExpensesPage({
   const canWrite = user
     ? roleHasPermission(user.role, 'expenses:write')
     : false;
+  const canDelete = user
+    ? roleHasPermission(user.role, 'expenses:delete')
+    : false;
   const canApprove = user
     ? roleHasPermission(user.role, 'finances:approve')
     : false;
+  const accountingLimitHint =
+    user?.role === 'ACCOUNTING'
+      ? `Accounting limit: ${ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN} AFN gross.`
+      : null;
 
   const projectFilter =
     embeddedProjectId ?? searchParams.get('projectId') ?? '';
@@ -115,13 +123,23 @@ export function ExpensesPage({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const rawCategory = form.category?.trim() || 'OTHER';
+      const fromLabel = Object.entries(BUDGET_CATEGORY_LABELS).find(
+        ([, label]) => label.toLowerCase() === rawCategory.toLowerCase(),
+      );
+      const category =
+        fromLabel?.[0] ??
+        (BUDGET_CATEGORIES as readonly string[]).find(
+          (key) => key.toLowerCase() === rawCategory.toLowerCase(),
+        ) ??
+        rawCategory;
       const payload: ExpenseInput = {
         description: form.description.trim(),
         netAmount: form.netAmount.trim(),
         currency: form.currency || currency || undefined,
-        taxRate: form.taxRate?.trim() || '19',
-        category: form.category || 'OTHER',
-        status: form.status || 'DRAFT',
+        taxRate: '0',
+        category,
+        status: 'PAID',
         projectId: form.projectId || projectFilter || undefined,
         supplierId: form.supplierId || undefined,
         invoiceNumber: form.invoiceNumber?.trim() || undefined,
@@ -164,11 +182,11 @@ export function ExpensesPage({
     },
   });
 
-  const categoryOptions = useMemo(
+  const categorySuggestions = useMemo(
     () =>
       BUDGET_CATEGORIES.map((value) => ({
         value,
-        label: BUDGET_CATEGORY_LABELS[value],
+        label: BUDGET_CATEGORY_LABELS[value] ?? value,
       })),
     [],
   );
@@ -212,6 +230,10 @@ export function ExpensesPage({
 
       {showForm && canWrite ? (
         <Card className="mb-6" title="New expense">
+          <p className="mb-3 text-sm text-muted">
+            Expenses are saved as fully paid. Partial payments are not used.
+            {accountingLimitHint ? ` ${accountingLimitHint}` : ''}
+          </p>
           <form
             className="grid gap-3 md:grid-cols-2"
             onSubmit={(e) => {
@@ -254,38 +276,27 @@ export function ExpensesPage({
                 setForm((prev) => ({ ...prev, netAmount: e.target.value }))
               }
             />
-            <Input
-              label="VAT (%)"
-              name="taxRate"
-              value={form.taxRate ?? '19'}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, taxRate: e.target.value }))
-              }
-            />
-            <Select
-              label="Category"
-              name="category"
-              value={form.category ?? 'OTHER'}
-              options={categoryOptions}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  category: e.target.value as BudgetCategory,
-                }))
-              }
-            />
-            <Select
-              label="Status"
-              name="status"
-              value={form.status ?? 'DRAFT'}
-              options={statusOptions}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  status: e.target.value as ExpenseStatus,
-                }))
-              }
-            />
+            <div>
+              <Input
+                label="Category"
+                name="category"
+                list="expense-category-suggestions"
+                required
+                value={form.category ?? ''}
+                placeholder="Type a category or pick a suggestion"
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    category: e.target.value,
+                  }))
+                }
+              />
+              <datalist id="expense-category-suggestions">
+                {categorySuggestions.map((option) => (
+                  <option key={option.value} value={option.label} />
+                ))}
+              </datalist>
+            </div>
             {!embeddedProjectId ? (
               <Select
                 label="Project"
@@ -460,7 +471,7 @@ export function ExpensesPage({
                     </td>
                   ) : null}
                   <td className={dataTableTdClassName()}>
-                    {BUDGET_CATEGORY_LABELS[expense.category]}
+                    {budgetCategoryLabel(expense.category)}
                   </td>
                   <td className={dataTableTdClassName()}>
                     <ExpenseStatusBadge status={expense.status} />
@@ -488,7 +499,7 @@ export function ExpensesPage({
                           Approve
                         </button>
                       ) : null}
-                      {canWrite ? (
+                      {canDelete ? (
                         <button
                           type="button"
                           className="text-danger hover:underline"

@@ -1,14 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import {
-  PAYMENT_TYPE_LABELS,
-  roleHasPermission,
-  type InvoiceStatus,
-} from '@fbm/shared';
-import {
-  InvoiceStatusBadge,
-  PaymentTypeBadge,
-} from '../components/finance/StatusBadges';
+import { roleHasPermission, type InvoiceStatus } from '@fbm/shared';
+import { InvoiceStatusBadge } from '../components/finance/StatusBadges';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { CurrencyValue } from '../components/ui/CurrencyValue';
@@ -27,11 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
 import { formatDateDe } from '../lib/format';
 import { fetchDashboard } from '../services/dashboard';
-import {
-  fetchExpenses,
-  fetchInvoices,
-  fetchPayments,
-} from '../services/finance';
+import { fetchExpenses, fetchInvoices } from '../services/finance';
 
 const OPEN_STATUSES: InvoiceStatus[] = [
   'SENT',
@@ -96,12 +85,6 @@ export function FinancesPage() {
     enabled: canRead,
   });
 
-  const paymentsQuery = useQuery({
-    queryKey: ['payments', 'finances-recent'],
-    queryFn: () => fetchPayments({ page: 1, pageSize: 10 }),
-    enabled: canRead,
-  });
-
   if (!canRead) {
     return (
       <div className="space-y-4">
@@ -120,8 +103,7 @@ export function FinancesPage() {
   const loading =
     dashboardQuery.isLoading ||
     openArQueries.some((q) => q.isLoading) ||
-    openApQueries.some((q) => q.isLoading) ||
-    paymentsQuery.isLoading;
+    openApQueries.some((q) => q.isLoading);
 
   if (loading) {
     return (
@@ -161,13 +143,12 @@ export function FinancesPage() {
   const openExpenses = (expensesQuery.data?.data ?? []).filter(
     (row) => Number(row.grossAmount) - Number(row.paidAmount) > 0,
   );
-  const payments = paymentsQuery.data?.data ?? [];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Finances"
-        description="Liquidity, receivables, payables, and recent payments."
+        description="Liquidity, receivables, payables, and open items."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link to="/invoices">
@@ -175,9 +156,6 @@ export function FinancesPage() {
             </Link>
             <Link to="/expenses">
               <Button variant="secondary">Expenses</Button>
-            </Link>
-            <Link to="/payments">
-              <Button variant="secondary">Payments</Button>
             </Link>
             <Link to="/reports">
               <Button>Reports</Button>
@@ -391,55 +369,6 @@ export function FinancesPage() {
           )}
         </Card>
 
-        <Card title="Recent payments" description="Latest payment entries">
-          {payments.length === 0 ? (
-            <EmptyState
-              title="No payments"
-              description="Payments appear here after recording."
-            />
-          ) : (
-            <DataTable className="border-0 shadow-none">
-              <table className="min-w-full text-left text-sm">
-                <thead className={dataTableHeadClassName()}>
-                  <tr>
-                    <th className={dataTableThClassName()}>Payment</th>
-                    <th className={dataTableThClassName()}>Type</th>
-                    <th className={dataTableThClassName()}>Date</th>
-                    <th className={dataTableThClassName('right')}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((payment) => (
-                    <tr key={payment.id} className={dataTableRowClassName()}>
-                      <td className={dataTableTdClassName()}>
-                        <div className="font-medium">{payment.paymentNumber}</div>
-                        <div className="text-xs text-muted">
-                          {payment.invoice.invoiceNumber}
-                        </div>
-                      </td>
-                      <td className={dataTableTdClassName()}>
-                        <PaymentTypeBadge type={payment.type} />
-                        <span className="sr-only">
-                          {PAYMENT_TYPE_LABELS[payment.type]}
-                        </span>
-                      </td>
-                      <td className={dataTableTdClassName()}>
-                        {formatDateDe(payment.paymentDate)}
-                      </td>
-                      <td className={dataTableTdClassName('right')}>
-                        <CurrencyValue
-                          value={payment.amount}
-                          currency={currency}
-                          size="sm"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </DataTable>
-          )}
-        </Card>
       </div>
 
       <p className="text-helper">

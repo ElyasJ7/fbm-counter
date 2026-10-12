@@ -9,10 +9,10 @@ type CurrencyValueProps = {
   tone?: 'default' | 'success' | 'danger' | 'muted';
 };
 
-/** Formatted EUR (or other) amount with tabular figures. */
+/** Formatted money amount with tabular figures. */
 export function CurrencyValue({
   value,
-  currency = 'EUR',
+  currency = 'AFN',
   className,
   size = 'md',
   tone = 'default',

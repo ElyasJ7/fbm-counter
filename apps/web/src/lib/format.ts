@@ -8,14 +8,14 @@ export function formatCurrency(
   return formatMoneyDe(value, currency);
 }
 
-/** Form field label with ISO currency code, e.g. Amount (EUR). */
+/** Form field label with ISO currency code, e.g. Amount (AFN). */
 export function amountFieldLabel(currency?: string | null) {
   const code =
     (currency ?? DEFAULT_CURRENCY).trim().toUpperCase() || DEFAULT_CURRENCY;
   return `Amount (${code})`;
 }
 
-/** Form field label with ISO currency code, e.g. Net Amount (EUR). */
+/** Form field label with ISO currency code, e.g. Net Amount (AFN). */
 export function netAmountFieldLabel(currency?: string | null) {
   const code =
     (currency ?? DEFAULT_CURRENCY).trim().toUpperCase() || DEFAULT_CURRENCY;

@@ -425,10 +425,8 @@ export class InvoicesService {
           );
       }
       doc.moveDown();
-      doc.fontSize(11).text(`Net: ${data.netAmount} ${cur}`);
-      doc.text(`VAT (${data.taxRate}%): ${data.taxAmount} ${cur}`);
-      doc.fontSize(12).text(`Gross: ${data.grossAmount} ${cur}`);
-      doc.text(`Paid: ${data.paidAmount} ${cur}`);
+      doc.fontSize(12).text(`Total: ${data.grossAmount} ${cur}`);
+      doc.fontSize(11).text(`Paid: ${data.paidAmount} ${cur}`);
       if (data.notes) {
         doc.moveDown();
         doc.fontSize(10).fillColor('#555').text(`Note: ${data.notes}`);
@@ -467,15 +465,12 @@ export class InvoicesService {
     const items = this.mapItems(dto.items);
 
     const created = await this.prisma.$transaction(async (tx) => {
-      const settings = await tx.companySettings.findFirst({
-        select: { defaultVatRate: true },
-      });
       const currency = await resolveTransactionCurrency(tx, {
         explicit: dto.currency,
         projectId: dto.projectId,
       });
-      const taxRate =
-        dto.taxRate ?? settings?.defaultVatRate.toString() ?? '19';
+      // Afghanistan: no VAT — always 0%.
+      const taxRate = '0';
       const amounts = this.computeTax(
         dto.netAmount,
         taxRate,
@@ -507,9 +502,16 @@ export class InvoicesService {
               taxRate: amounts.taxRate,
               taxAmount: amounts.taxAmount,
               grossAmount: amounts.grossAmount,
-              paidAmount: '0',
+              // Invoices are recorded fully paid — no separate payments ledger.
+              paidAmount:
+                (dto.status ?? InvoiceStatus.DRAFT) === InvoiceStatus.CANCELLED
+                  ? '0'
+                  : amounts.grossAmount,
               currency,
-              status: dto.status ?? InvoiceStatus.DRAFT,
+              status:
+                (dto.status ?? InvoiceStatus.DRAFT) === InvoiceStatus.CANCELLED
+                  ? InvoiceStatus.CANCELLED
+                  : InvoiceStatus.PAID,
               paymentTerms: dto.paymentTerms,
               notes: dto.notes,
               ...(items ? { items: { create: items } } : {}),
@@ -622,19 +624,8 @@ export class InvoicesService {
       }
     }
 
-    const paymentAggregate = await this.prisma.payment.aggregate({
-      where: { invoiceId: id, deletedAt: null },
-      _sum: { amount: true },
-    });
-    const paidAmount = (paymentAggregate._sum.amount ?? money(0)).toString();
-
     let nextCurrency = existing.currency;
     if (dto.currency !== undefined) {
-      if (!money(paidAmount).isZero()) {
-        throw new BadRequestException(
-          'Cannot change invoice currency after payments have been recorded',
-        );
-      }
       nextCurrency = await resolveTransactionCurrency(this.prisma, {
         explicit: dto.currency,
         projectId:
@@ -642,8 +633,7 @@ export class InvoicesService {
       });
     } else if (
       dto.projectId !== undefined &&
-      dto.projectId !== existing.projectId &&
-      money(paidAmount).isZero()
+      dto.projectId !== existing.projectId
     ) {
       nextCurrency = await resolveTransactionCurrency(this.prisma, {
         projectId: dto.projectId,
@@ -651,12 +641,15 @@ export class InvoicesService {
     }
 
     const netAmount = dto.netAmount ?? existing.netAmount.toString();
-    const taxRate = dto.taxRate ?? existing.taxRate.toString();
+    // Afghanistan: no VAT — always 0%.
+    const taxRate = '0';
     const items = this.mapItems(dto.items);
     const amounts =
       dto.netAmount !== undefined ||
       dto.taxRate !== undefined ||
-      items !== undefined
+      items !== undefined ||
+      !money(existing.taxRate).isZero() ||
+      !money(existing.taxAmount).isZero()
         ? this.computeTax(
             netAmount,
             taxRate,
@@ -664,9 +657,9 @@ export class InvoicesService {
           )
         : {
             netAmount: existing.netAmount.toString(),
-            taxAmount: existing.taxAmount.toString(),
-            grossAmount: existing.grossAmount.toString(),
-            taxRate: existing.taxRate.toString(),
+            taxAmount: '0',
+            grossAmount: money(netAmount).toFixed(4),
+            taxRate: '0.00',
           };
 
     const dueDate = dto.dueDate
@@ -676,12 +669,17 @@ export class InvoicesService {
       ? dateOnlyToUtcDate(dto.issueDate)
       : existing.issueDate;
     const requestedStatus = dto.status ?? existing.status;
-    const status = resolveInvoiceStatus({
-      currentStatus: requestedStatus,
-      grossAmount: amounts.grossAmount,
-      paidAmount,
-      dueDate,
-    });
+    const status =
+      requestedStatus === InvoiceStatus.CANCELLED
+        ? InvoiceStatus.CANCELLED
+        : resolveInvoiceStatus({
+            currentStatus: InvoiceStatus.PAID,
+            grossAmount: amounts.grossAmount,
+            paidAmount: amounts.grossAmount,
+            dueDate,
+          });
+    const paidAmount =
+      status === InvoiceStatus.CANCELLED ? '0' : amounts.grossAmount;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (items) {

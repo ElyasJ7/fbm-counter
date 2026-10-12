@@ -2,18 +2,19 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsEnum,
   IsNumberString,
   IsOptional,
   IsString,
   MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
-import { BudgetCategory } from '@prisma/client';
 
 export class UpsertBudgetLineDto {
-  @IsEnum(BudgetCategory)
-  category!: BudgetCategory;
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  category!: string;
 
   @IsNumberString()
   plannedAmount!: string;
