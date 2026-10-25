@@ -1,6 +1,11 @@
 export { Decimal, money, asMoneyString } from './money';
 import { money, asMoneyString, type Decimal } from './money';
 import { computeHeaderVat } from './vat';
+export {
+  snapshotExpenseFx,
+  expenseAmountForProjectCurrency,
+  type ExpenseFxSnapshot,
+} from './expense-fx';
 
 export function formatMoneyDe(
   value: string | number | Decimal,

@@ -423,7 +423,7 @@ export function CurrencyConverterPage() {
         >
           {ratesQuery.isLoading ||
           usdAfnQuery.isLoading ||
-          eurAfnQuery.isLoading ? (
+          afnUsdQuery.isLoading ? (
             <p className="text-sm text-muted">Loading rates…</p>
           ) : (
             <ul className="space-y-3">

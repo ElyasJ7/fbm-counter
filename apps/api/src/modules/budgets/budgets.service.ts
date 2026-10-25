@@ -2,7 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { budgetCategoryLabel } from '@fbm/shared';
 import type { AuthUserDto } from '@fbm/shared';
-import { aggregateCosts, computeBudgetLine, money } from '@fbm/financial-core';
+import {
+  aggregateCosts,
+  computeBudgetLine,
+  expenseAmountForProjectCurrency,
+  money,
+} from '@fbm/financial-core';
 import { ProjectAccessService } from '../authz/project-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -58,7 +63,11 @@ export class BudgetsService {
    * non-duplicate expenses). Supplier invoice amounts land in OTHER.
    */
   private async syncAmountsFromCosts(projectId: string) {
-    const [expenses, supplierInvoices, lines] = await Promise.all([
+    const [project, expenses, supplierInvoices, lines] = await Promise.all([
+      this.prisma.project.findFirst({
+        where: { id: projectId, deletedAt: null },
+        select: { currency: true },
+      }),
       this.prisma.expense.findMany({
         where: {
           projectId,
@@ -71,6 +80,9 @@ export class BudgetsService {
           grossAmount: true,
           paidAmount: true,
           invoiceNumber: true,
+          currency: true,
+          amountUsd: true,
+          amountAfn: true,
         },
       }),
       this.prisma.invoice.findMany({
@@ -93,14 +105,25 @@ export class BudgetsService {
       }),
     ]);
 
+    const projectCurrency = project?.currency ?? 'USD';
     const costs = aggregateCosts({
-      expenses: expenses.map((row) => ({
-        status: row.status,
-        grossAmount: row.grossAmount.toString(),
-        paidAmount: row.paidAmount.toString(),
-        invoiceNumber: row.invoiceNumber,
-        category: row.category,
-      })),
+      expenses: expenses.map((row) => {
+        const booked = expenseAmountForProjectCurrency({
+          projectCurrency,
+          currency: row.currency,
+          grossAmount: row.grossAmount.toString(),
+          paidAmount: row.paidAmount.toString(),
+          amountUsd: row.amountUsd?.toString() ?? null,
+          amountAfn: row.amountAfn?.toString() ?? null,
+        });
+        return {
+          status: row.status,
+          grossAmount: booked.grossAmount,
+          paidAmount: booked.paidAmount,
+          invoiceNumber: row.invoiceNumber,
+          category: row.category,
+        };
+      }),
       supplierInvoices: supplierInvoices.map((row) => ({
         status: row.status,
         grossAmount: row.grossAmount.toString(),

@@ -231,7 +231,8 @@ export function ExpensesPage({
       {showForm && canWrite ? (
         <Card className="mb-6" title="New expense">
           <p className="mb-3 text-sm text-muted">
-            Expenses are saved as fully paid. Partial payments are not used.
+            Expenses are saved as fully paid. AFN/USD amounts are converted with
+            the current Settings rate and frozen on this expense.
             {accountingLimitHint ? ` ${accountingLimitHint}` : ''}
           </p>
           <form
@@ -443,6 +444,8 @@ export function ExpensesPage({
                 <th className={dataTableThClassName()}>Category</th>
                 <th className={dataTableThClassName()}>Status</th>
                 <th className={dataTableThClassName('right')}>Gross</th>
+                <th className={dataTableThClassName('right')}>Equivalent</th>
+                <th className={dataTableThClassName()}>Rate</th>
                 <th className={dataTableThClassName()}>Due</th>
                 <th className={dataTableThClassName()}>Actions</th>
               </tr>
@@ -482,6 +485,28 @@ export function ExpensesPage({
                       currency={expense.currency}
                       size="sm"
                     />
+                  </td>
+                  <td className={dataTableTdClassName('right')}>
+                    {expense.currency === 'USD' && expense.amountAfn ? (
+                      <CurrencyValue
+                        value={expense.amountAfn}
+                        currency="AFN"
+                        size="sm"
+                      />
+                    ) : expense.currency === 'AFN' && expense.amountUsd ? (
+                      <CurrencyValue
+                        value={expense.amountUsd}
+                        currency="USD"
+                        size="sm"
+                      />
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className={dataTableTdClassName()}>
+                    {expense.usdToAfnRate
+                      ? `1 USD = ${expense.usdToAfnRate} AFN`
+                      : '—'}
                   </td>
                   <td className={dataTableTdClassName()}>
                     {formatDateDe(expense.dueDate)}

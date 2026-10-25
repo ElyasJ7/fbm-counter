@@ -25,6 +25,7 @@ import { useAuth } from '../hooks/useAuth';
 import { ApiError } from '../lib/api';
 import { formatDateDe } from '../lib/format';
 import {
+  createManualExchangeRate,
   fetchLatestExchangeRates,
   refreshExchangeRates,
 } from '../services/exchange-rates';
@@ -152,12 +153,57 @@ export function SettingsPage() {
   });
 
   const canManageFx =
-    user?.role === 'ADMIN' || user?.role === 'MANAGEMENT';
+    user?.role === 'ADMIN' ||
+    user?.role === 'MANAGEMENT' ||
+    user?.role === 'ACCOUNTING';
+
+  const [usdToAfnInput, setUsdToAfnInput] = useState('');
+  const [manualRateError, setManualRateError] = useState<string | null>(null);
+
+  const currentUsdToAfn = useMemo(() => {
+    const rates = ratesQuery.data?.rates ?? [];
+    const direct = rates.find(
+      (row) => row.baseCurrency === 'USD' && row.quoteCurrency === 'AFN',
+    );
+    if (direct) return direct.rate;
+    const inverse = rates.find(
+      (row) => row.baseCurrency === 'AFN' && row.quoteCurrency === 'USD',
+    );
+    if (!inverse) return null;
+    const n = Number(inverse.rate);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return (1 / n).toFixed(8);
+  }, [ratesQuery.data]);
+
+  useEffect(() => {
+    if (currentUsdToAfn && !usdToAfnInput) {
+      setUsdToAfnInput(currentUsdToAfn);
+    }
+  }, [currentUsdToAfn, usdToAfnInput]);
 
   const refreshRatesMutation = useMutation({
     mutationFn: refreshExchangeRates,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['exchange-rates'] });
+    },
+  });
+
+  const manualRateMutation = useMutation({
+    mutationFn: () =>
+      createManualExchangeRate({
+        baseCurrency: 'USD',
+        quoteCurrency: 'AFN',
+        rate: usdToAfnInput.trim(),
+        reason: 'Manual USD→AFN rate for expense/budget booking',
+      }),
+    onSuccess: async () => {
+      setManualRateError(null);
+      await queryClient.invalidateQueries({ queryKey: ['exchange-rates'] });
+    },
+    onError: (error) => {
+      setManualRateError(
+        error instanceof ApiError ? error.message : 'Could not save rate',
+      );
     },
   });
 
@@ -495,28 +541,12 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card
-            title="Exchange rates"
-            className="lg:col-span-2"
-            actions={
-              canManageFx ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    refreshRatesMutation.isPending ||
-                    ratesQuery.data?.providerConfigured === false
-                  }
-                  onClick={() => refreshRatesMutation.mutate()}
-                >
-                  {refreshRatesMutation.isPending
-                    ? 'Refreshing…'
-                    : 'Refresh rates'}
-                </Button>
-              ) : null
-            }
-          >
+          <Card title="USD ↔ AFN exchange rate" className="lg:col-span-2">
+            <p className="mb-3 text-sm text-muted">
+              Set the booking rate used for new expenses. Changing the rate does
+              not rewrite past expenses — each expense keeps the rate from when
+              it was created.
+            </p>
             {ratesQuery.isLoading ? (
               <p className="text-sm text-muted">Loading rates…</p>
             ) : null}
@@ -527,58 +557,59 @@ export function SettingsPage() {
                   : 'Could not load exchange rates'}
               </Alert>
             ) : null}
-            {ratesQuery.data ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted">
-                  {ratesQuery.data.providerConfigured
-                    ? 'Live FX provider is configured.'
-                    : 'No live FX provider configured (FX_PROVIDER=none). Cached or manual rates still apply.'}
-                  {ratesQuery.data.lastUpdatedAt
-                    ? ` Last updated: ${formatDateDe(ratesQuery.data.lastUpdatedAt.slice(0, 10))} ${ratesQuery.data.lastUpdatedAt.slice(11, 16)} UTC.`
-                    : ' No rates stored yet.'}
-                </p>
-                {refreshRatesMutation.error ? (
-                  <Alert tone="danger">
-                    {refreshRatesMutation.error instanceof ApiError
-                      ? refreshRatesMutation.error.message
-                      : 'Refresh failed'}
-                  </Alert>
-                ) : null}
-                {ratesQuery.data.rates.length === 0 ? (
-                  <p className="text-sm text-muted">
-                    No exchange rates available. Configure FX_PROVIDER /
-                    FX_API_KEY and refresh, or wait for Phase D+ conversion UI.
-                  </p>
-                ) : (
-                  <div className="table-scroll">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="border-b border-[var(--color-border)] text-muted">
-                        <tr>
-                          <th className="px-2 py-2 font-medium">Pair</th>
-                          <th className="px-2 py-2 font-medium">Rate</th>
-                          <th className="px-2 py-2 font-medium">Source</th>
-                          <th className="px-2 py-2 font-medium">Provider</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ratesQuery.data.rates.map((row) => (
-                          <tr
-                            key={row.id}
-                            className="border-b border-slate-100"
-                          >
-                            <td className="px-2 py-2 font-medium">
-                              1 {row.baseCurrency} → {row.quoteCurrency}
-                            </td>
-                            <td className="px-2 py-2">{row.rate}</td>
-                            <td className="px-2 py-2">{row.source}</td>
-                            <td className="px-2 py-2">{row.provider}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">1 USD =</span>
+                <Input
+                  label="AFN"
+                  name="usdToAfnRate"
+                  value={usdToAfnInput}
+                  disabled={!canManageFx}
+                  onChange={(e) => setUsdToAfnInput(e.target.value)}
+                />
+                <span className="text-sm font-medium">AFN</span>
               </div>
+              {canManageFx ? (
+                <Button
+                  type="button"
+                  disabled={manualRateMutation.isPending || !usdToAfnInput.trim()}
+                  onClick={() => manualRateMutation.mutate()}
+                >
+                  {manualRateMutation.isPending ? 'Saving…' : 'Save rate'}
+                </Button>
+              ) : null}
+              {canManageFx && ratesQuery.data?.providerConfigured ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={refreshRatesMutation.isPending}
+                  onClick={() => refreshRatesMutation.mutate()}
+                >
+                  {refreshRatesMutation.isPending
+                    ? 'Refreshing…'
+                    : 'Refresh from provider'}
+                </Button>
+              ) : null}
+            </div>
+            {currentUsdToAfn ? (
+              <p className="mt-2 text-sm text-muted">
+                Current rate: 1 USD = {currentUsdToAfn} AFN
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-muted">
+                No USD→AFN rate saved yet. Set one before recording expenses.
+              </p>
+            )}
+            {manualRateError ? (
+              <Alert tone="danger" className="mt-3">
+                {manualRateError}
+              </Alert>
+            ) : null}
+            {manualRateMutation.isSuccess ? (
+              <Alert tone="success" className="mt-3">
+                Rate saved. New expenses will use this rate.
+              </Alert>
             ) : null}
           </Card>
 

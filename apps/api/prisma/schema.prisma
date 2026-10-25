@@ -381,6 +381,12 @@ model Expense {
   paidAmount      Decimal        @default(0) @db.Decimal(19, 4)
   /// Transaction currency (AFN | USD). Inherited from project or company books.
   currency        String         @default("AFN")
+  /// Frozen booking rate: AFN per 1 USD at expense create/update time.
+  usdToAfnRate    Decimal?       @db.Decimal(19, 8)
+  /// Gross amount in USD using usdToAfnRate (budget books when project is USD).
+  amountUsd       Decimal?       @db.Decimal(19, 4)
+  /// Gross amount in AFN using usdToAfnRate (display / AFN project books).
+  amountAfn       Decimal?       @db.Decimal(19, 4)
   status          ExpenseStatus  @default(DRAFT)
   paymentDate    DateTime?
   paymentMethod  PaymentMethod?

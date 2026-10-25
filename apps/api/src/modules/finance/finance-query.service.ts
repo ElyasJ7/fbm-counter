@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { aggregateCosts, money } from '@fbm/financial-core';
+import {
+  aggregateCosts,
+  expenseAmountForProjectCurrency,
+  money,
+} from '@fbm/financial-core';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -37,7 +41,7 @@ export class FinanceQueryService {
       ? { projectId }
       : this.projectIdFilter(projectIds);
 
-    const [expenses, supplierInvoices] = await Promise.all([
+    const [expenses, supplierInvoices, projects] = await Promise.all([
       this.prisma.expense.findMany({
         where: {
           ...projectFilter,
@@ -52,6 +56,9 @@ export class FinanceQueryService {
           category: true,
           supplierId: true,
           projectId: true,
+          currency: true,
+          amountUsd: true,
+          amountAfn: true,
         },
       }),
       this.prisma.invoice.findMany({
@@ -68,20 +75,46 @@ export class FinanceQueryService {
           invoiceNumber: true,
           supplierId: true,
           projectId: true,
+          currency: true,
         },
+      }),
+      this.prisma.project.findMany({
+        where: projectId
+          ? { id: projectId, deletedAt: null }
+          : projectIds === null
+            ? { deletedAt: null }
+            : { id: { in: projectIds }, deletedAt: null },
+        select: { id: true, currency: true },
       }),
     ]);
 
+    const projectCurrency = new Map(
+      projects.map((project) => [project.id, project.currency]),
+    );
+
     return {
-      expenses: expenses.map((row) => ({
-        status: row.status,
-        grossAmount: row.grossAmount.toString(),
-        paidAmount: row.paidAmount.toString(),
-        invoiceNumber: row.invoiceNumber,
-        category: row.category,
-        supplierId: row.supplierId,
-        projectId: row.projectId,
-      })),
+      expenses: expenses.map((row) => {
+        const booksCurrency =
+          (row.projectId ? projectCurrency.get(row.projectId) : null) ??
+          row.currency;
+        const booked = expenseAmountForProjectCurrency({
+          projectCurrency: booksCurrency,
+          currency: row.currency,
+          grossAmount: row.grossAmount.toString(),
+          paidAmount: row.paidAmount.toString(),
+          amountUsd: row.amountUsd?.toString() ?? null,
+          amountAfn: row.amountAfn?.toString() ?? null,
+        });
+        return {
+          status: row.status,
+          grossAmount: booked.grossAmount,
+          paidAmount: booked.paidAmount,
+          invoiceNumber: row.invoiceNumber,
+          category: row.category,
+          supplierId: row.supplierId,
+          projectId: row.projectId,
+        };
+      }),
       supplierInvoices: supplierInvoices.map((row) => ({
         status: row.status,
         grossAmount: row.grossAmount.toString(),

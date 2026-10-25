@@ -11,6 +11,7 @@ import {
   calculateTaxAmount,
   money,
   resolveExpenseStatus,
+  snapshotExpenseFx,
 } from '@fbm/financial-core';
 import {
   ACCOUNTING_EXPENSE_GROSS_LIMIT_AFN,
@@ -20,6 +21,7 @@ import { ProjectAccessService } from '../authz/project-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BudgetsService } from '../budgets/budgets.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ExchangeRatesService } from '../exchange-rates/exchange-rates.service';
 import { resolveTransactionCurrency } from '../common/transaction-currency';
 import type { CreateExpenseDto } from './dto/create-expense.dto';
 import type { UpdateExpenseDto } from './dto/update-expense.dto';
@@ -36,6 +38,7 @@ export class ExpensesService {
     private readonly notifications: NotificationsService,
     private readonly budgets: BudgetsService,
     private readonly projectAccess: ProjectAccessService,
+    private readonly exchangeRates: ExchangeRatesService,
   ) {}
 
   private decimalToString(value: Prisma.Decimal | string | number): string {
@@ -91,6 +94,15 @@ export class ExpensesService {
       grossAmount: this.decimalToString(expense.grossAmount),
       paidAmount: this.decimalToString(expense.paidAmount),
       currency: expense.currency,
+      usdToAfnRate: expense.usdToAfnRate
+        ? this.decimalToString(expense.usdToAfnRate)
+        : null,
+      amountUsd: expense.amountUsd
+        ? this.decimalToString(expense.amountUsd)
+        : null,
+      amountAfn: expense.amountAfn
+        ? this.decimalToString(expense.amountAfn)
+        : null,
       status,
       paymentDate: expense.paymentDate?.toISOString() ?? null,
       paymentMethod: expense.paymentMethod,
@@ -100,6 +112,40 @@ export class ExpensesService {
       project: expense.project,
       supplier: expense.supplier,
     };
+  }
+
+  /**
+   * Resolve current 1 USD = X AFN rate for new bookings.
+   * Updates keep an existing frozen rate unless none was stored yet.
+   */
+  private async resolveUsdToAfnRate(existingRate?: string | null) {
+    if (existingRate && money(existingRate).gt(0)) {
+      return money(existingRate).toDecimalPlaces(8).toFixed();
+    }
+    const row = await this.exchangeRates.resolveRate({
+      baseCurrency: 'USD',
+      quoteCurrency: 'AFN',
+    });
+    if (!row?.rate || money(row.rate).lte(0)) {
+      throw new BadRequestException(
+        'Set a manual exchange rate (1 USD = X AFN) in Settings before recording expenses.',
+      );
+    }
+    return money(row.rate).toDecimalPlaces(8).toFixed();
+  }
+
+  private buildFxSnapshot(currency: string, grossAmount: string, rate: string) {
+    try {
+      return snapshotExpenseFx({
+        currency,
+        grossAmount,
+        usdToAfnRate: rate,
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid expense FX snapshot',
+      );
+    }
   }
 
   private async assertProject(projectId?: string | null) {
@@ -255,6 +301,24 @@ export class ExpensesService {
       }
     }
 
+    const currencyPreview = await resolveTransactionCurrency(this.prisma, {
+      explicit: dto.currency,
+      projectId: dto.projectId,
+    });
+    const taxRatePreview = '0';
+    const amountsPreview = this.computeTax(dto.netAmount, taxRatePreview);
+    this.assertCanWriteExpenseAmount(
+      user,
+      amountsPreview.grossAmount,
+      currencyPreview,
+    );
+    const usdToAfnRate = await this.resolveUsdToAfnRate();
+    const fxPreview = this.buildFxSnapshot(
+      currencyPreview,
+      amountsPreview.grossAmount,
+      usdToAfnRate,
+    );
+
     const created = await this.prisma.$transaction(async (tx) => {
       const currency = await resolveTransactionCurrency(tx, {
         explicit: dto.currency,
@@ -263,7 +327,6 @@ export class ExpensesService {
       // Afghanistan: no VAT — always 0%.
       const taxRate = '0';
       const amounts = this.computeTax(dto.netAmount, taxRate);
-      this.assertCanWriteExpenseAmount(user, amounts.grossAmount, currency);
       const expenseNumber =
         dto.expenseNumber ?? (await this.nextExpenseNumber(tx));
       // Expenses are always recorded fully paid — no partial payment ledger.
@@ -273,6 +336,11 @@ export class ExpensesService {
           : ExpenseStatus.PAID;
       const paidAmount =
         status === ExpenseStatus.CANCELLED ? '0' : amounts.grossAmount;
+      const fx =
+        currency === currencyPreview &&
+        amounts.grossAmount === amountsPreview.grossAmount
+          ? fxPreview
+          : this.buildFxSnapshot(currency, amounts.grossAmount, usdToAfnRate);
 
       const row = await tx.expense.create({
         data: {
@@ -290,6 +358,9 @@ export class ExpensesService {
           grossAmount: amounts.grossAmount,
           paidAmount,
           currency,
+          usdToAfnRate: fx.usdToAfnRate,
+          amountUsd: fx.amountUsd,
+          amountAfn: fx.amountAfn,
           status,
           paymentDate:
             status === ExpenseStatus.PAID
@@ -390,6 +461,16 @@ export class ExpensesService {
 
     this.assertCanWriteExpenseAmount(user, amounts.grossAmount, nextCurrency);
 
+    // Keep the frozen booking rate; only fill it if the row never had one.
+    const usdToAfnRate = await this.resolveUsdToAfnRate(
+      existing.usdToAfnRate?.toString() ?? null,
+    );
+    const fx = this.buildFxSnapshot(
+      nextCurrency,
+      amounts.grossAmount,
+      usdToAfnRate,
+    );
+
     const dueDate =
       dto.dueDate === undefined
         ? existing.dueDate
@@ -440,6 +521,9 @@ export class ExpensesService {
           grossAmount: amounts.grossAmount,
           paidAmount,
           currency: nextCurrency,
+          usdToAfnRate: fx.usdToAfnRate,
+          amountUsd: fx.amountUsd,
+          amountAfn: fx.amountAfn,
           status,
           paymentDate:
             dto.paymentDate === undefined

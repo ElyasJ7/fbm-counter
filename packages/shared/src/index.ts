@@ -498,6 +498,12 @@ export type ExpenseDto = {
   paidAmount: string;
   /** Transaction currency (AFN | USD). */
   currency: string;
+  /** Frozen AFN per 1 USD at booking time. */
+  usdToAfnRate: string | null;
+  /** Gross in USD at the frozen rate (for USD project budgets). */
+  amountUsd: string | null;
+  /** Gross in AFN at the frozen rate (display / AFN budgets). */
+  amountAfn: string | null;
   status: ExpenseStatus;
   paymentDate: string | null;
   paymentMethod: PaymentMethod | null;
